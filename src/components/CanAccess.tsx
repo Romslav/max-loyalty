@@ -1,68 +1,47 @@
-import { usePermissions, Permission, Role } from '../hooks/usePermissions'
+import { ReactNode } from 'react';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface CanAccessProps {
-  children: React.ReactNode
-  permission?: Permission | Permission[]
-  role?: Role | Role[]
-  fallback?: React.ReactNode
-  requireAll?: boolean
+  permission?: string;
+  permissions?: string[];
+  requireAll?: boolean;
+  fallback?: ReactNode;
+  children: ReactNode;
 }
 
 /**
- * 🔍 CanAccess
- * 
- * Компонент для условного рендеринга гелементов на основе прав доступа.
- * 
- * Использование:
- * ```tsx
- * {/* Показать кнопку делета, если есть право */}
- * <CanAccess permission="guest:delete">
- *   <button onClick={handleDelete}>🗑️ Удалить</button>
- * </CanAccess>
+ * Component to conditionally render content based on permissions
+ * Usage:
+ *   <CanAccess permission="user:write">
+ *     <Button>Delete User</Button>
+ *   </CanAccess>
  *
- * {/* Кнопка доступна только для админов */}
- * <CanAccess role="admin">
- *   <button>🔈️ Панель админа</button>
- * </CanAccess>
- *
- * {/* При отсутствии прав показывать fallback */}
- * <CanAccess 
- *   permission="billing:write"
- *   fallback={<span>🔐 Нет прав</span>}
- * >
- *   <button>📋 Оптимизировать счет</button>
- * </CanAccess>
- * ```
+ *   <CanAccess permissions={['admin', 'moderator']} fallback={<p>No access</p>}>
+ *     <AdminPanel />
+ *   </CanAccess>
  */
-export const CanAccess = ({
-  children,
+export const CanAccess: React.FC<CanAccessProps> = ({
   permission,
-  role,
-  fallback,
+  permissions = [],
   requireAll = false,
-}: CanAccessProps) => {
-  const { hasPermission, hasAnyPermission, hasAllPermissions, hasRole } =
-    usePermissions()
+  fallback = null,
+  children,
+}) => {
+  const { hasPermission, hasAllPermissions, hasAnyPermission } = usePermissions();
 
-  let hasAccess = true
+  let hasAccess = false;
 
-  // 🔍 Проверяем права
   if (permission) {
-    if (Array.isArray(permission)) {
-      hasAccess = requireAll
-        ? hasAllPermissions(permission)
-        : hasAnyPermission(permission)
-    } else {
-      hasAccess = hasPermission(permission)
-    }
+    hasAccess = hasPermission(permission);
+  } else if (permissions.length > 0) {
+    hasAccess = requireAll
+      ? hasAllPermissions(permissions)
+      : hasAnyPermission(permissions);
   }
 
-  // 🔍 Проверяем роль
-  if (role && hasAccess) {
-    hasAccess = hasRole(role)
+  if (!hasAccess) {
+    return <>{fallback}</> || null;
   }
 
-  return hasAccess ? <>{children}</> : fallback || null
-}
-
-export default CanAccess
+  return <>{children}</>;
+};
