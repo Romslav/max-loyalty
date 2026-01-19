@@ -1,14 +1,22 @@
-import React from 'react'
-import { Toaster } from 'react-hot-toast'
-import AppRoutes from './router'
+import { RouterProvider } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
+import { router } from './router';
+import { useAuthStore } from './stores/authStore';
 
-const App: React.FC = () => {
+const App = () => {
+  const { initializeAuth } = useAuthStore();
+
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
   return (
     <>
-      <AppRoutes />
+      <RouterProvider router={router} />
       <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
     </>
-  )
-}
+  );
+};
 
-export default App
+export default App;
