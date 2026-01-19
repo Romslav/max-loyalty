@@ -1,18 +1,36 @@
-import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { createBrowserRouter } from 'react-router-dom';
+import { LoginPage } from '../pages/LoginPage';
+import { RegisterPage } from '../pages/RegisterPage';
+import { DashboardPage } from '../pages/DashboardPage';
+import { ProtectedRoute } from '../components/ProtectedRoute';
 
-// Pages
-import Dashboard from '../pages/Dashboard'
-
-const AppRoutes: React.FC = () => {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  )
-}
-
-export default AppRoutes
+export const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <ProtectedRoute />,
+    children: [
+      {
+        path: '/dashboard',
+        element: <DashboardPage />,
+      },
+    ],
+  },
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/register',
+    element: <RegisterPage />,
+  },
+  {
+    path: '/',
+    element: <ProtectedRoute />,
+    children: [
+      {
+        path: '/',
+        element: <DashboardPage />,
+      },
+    ],
+  },
+]);
