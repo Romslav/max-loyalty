@@ -1,191 +1,108 @@
-import axios, { AxiosError } from 'axios'
+import * as Sentry from '@sentry/react';
+import toast from 'react-hot-toast';
+import { useAuthStore } from '../stores/authStore';
 
-/**
- * Standardized API Error Response
- */
-export interface ApiError {
-  statusCode: number
-  message: string
-  details?: Record<string, unknown>
-  timestamp: string
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public message: string,
+    public data?: any
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
 }
 
 /**
- * Error Classification
- */
-export enum ErrorType {
-  VALIDATION = 'validation',
-  AUTHENTICATION = 'authentication',
-  AUTHORIZATION = 'authorization',
-  NOT_FOUND = 'not_found',
-  CONFLICT = 'conflict',
-  RATE_LIMIT = 'rate_limit',
-  SERVER_ERROR = 'server_error',
-  NETWORK_ERROR = 'network_error',
-  UNKNOWN = 'unknown',
-}
-
-/**
- * Parse and classify API errors
+ * Centralized error handling service
+ * Maps HTTP error codes to user-friendly messages
  */
 export const errorService = {
   /**
-   * Get error type from HTTP status code
+   * Handle API errors with appropriate logging and user feedback
    */
-  getErrorType(statusCode: number): ErrorType {
-    switch (true) {
-      case statusCode === 400:
-        return ErrorType.VALIDATION
-      case statusCode === 401:
-        return ErrorType.AUTHENTICATION
-      case statusCode === 403:
-        return ErrorType.AUTHORIZATION
-      case statusCode === 404:
-        return ErrorType.NOT_FOUND
-      case statusCode === 409:
-        return ErrorType.CONFLICT
-      case statusCode === 429:
-        return ErrorType.RATE_LIMIT
-      case statusCode >= 500:
-        return ErrorType.SERVER_ERROR
-      default:
-        return ErrorType.UNKNOWN
-    }
-  },
-
-  /**
-   * Get user-friendly error message
-   */
-  getErrorMessage(error: unknown): string {
-    // Handle Axios errors
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError<ApiError>
-      const status = axiosError.response?.status
-      const data = axiosError.response?.data
-
-      // Custom API error message
-      if (data?.message) {
-        return data.message
-      }
-
-      // Status-based fallback messages
-      switch (status) {
+  handleError(error: any): void {
+    if (error instanceof ApiError) {
+      switch (error.status) {
         case 400:
-          return 'Invalid request. Please check your input.'
+          this.handleValidationError(error);
+          break;
         case 401:
-          return 'Authentication failed. Please log in again.'
+          this.handleAuthError(error);
+          break;
         case 403:
-          return 'You do not have permission to perform this action.'
+          this.handlePermissionError(error);
+          break;
         case 404:
-          return 'Resource not found.'
-        case 409:
-          return 'This resource already exists.'
-        case 429:
-          return 'Too many requests. Please try again later.'
+          this.handleNotFoundError(error);
+          break;
         case 500:
-          return 'Server error. Please try again later.'
-        case 503:
-          return 'Service unavailable. Please try again later.'
+          this.handleServerError(error);
+          break;
         default:
-          return axiosError.message || 'An error occurred.'
+          this.handleGenericError(error);
       }
+    } else {
+      this.handleGenericError(error);
     }
-
-    // Handle standard Error objects
-    if (error instanceof Error) {
-      return error.message
-    }
-
-    // Handle string errors
-    if (typeof error === 'string') {
-      return error
-    }
-
-    // Fallback
-    return 'An unexpected error occurred.'
   },
 
   /**
-   * Check if error is specific type
+   * Handle 400 validation errors
    */
-  isValidationError(error: unknown): boolean {
-    if (axios.isAxiosError(error)) {
-      return error.response?.status === 400
-    }
-    return false
-  },
-
-  isAuthenticationError(error: unknown): boolean {
-    if (axios.isAxiosError(error)) {
-      return error.response?.status === 401
-    }
-    return false
-  },
-
-  isAuthorizationError(error: unknown): boolean {
-    if (axios.isAxiosError(error)) {
-      return error.response?.status === 403
-    }
-    return false
-  },
-
-  isNotFoundError(error: unknown): boolean {
-    if (axios.isAxiosError(error)) {
-      return error.response?.status === 404
-    }
-    return false
-  },
-
-  isServerError(error: unknown): boolean {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status
-      return status ? status >= 500 : false
-    }
-    return false
-  },
-
-  isNetworkError(error: unknown): boolean {
-    if (axios.isAxiosError(error)) {
-      return !error.response
-    }
-    return false
+  private handleValidationError(error: ApiError): void {
+    console.error('Validation error:', error.data);
+    const message = error.data?.message || 'Please check your input and try again';
+    toast.error(message);
+    Sentry.captureMessage(`Validation error: ${message}`, 'warning');
   },
 
   /**
-   * Extract validation errors from response
+   * Handle 401 authentication errors
    */
-  getValidationErrors(error: unknown): Record<string, string> {
-    if (axios.isAxiosError(error)) {
-      const data = error.response?.data as any
-      if (data?.details && typeof data.details === 'object') {
-        return data.details as Record<string, string>
-      }
-    }
-    return {}
+  private handleAuthError(error: ApiError): void {
+    console.error('Auth error:', error);
+    toast.error('Your session has expired. Please login again.');
+    // Trigger logout
+    useAuthStore.getState().logout();
+    window.location.href = '/auth/login';
+    Sentry.captureMessage('Authentication error', 'info');
   },
 
   /**
-   * Format error for logging
+   * Handle 403 permission errors
    */
-  formatErrorForLogging(error: unknown): Record<string, unknown> {
-    const formatted: Record<string, unknown> = {
-      message: this.getErrorMessage(error),
-      type: 'unknown',
-      timestamp: new Date().toISOString(),
-    }
-
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError<ApiError>
-      formatted.type = this.getErrorType(axiosError.response?.status || 0)
-      formatted.statusCode = axiosError.response?.status
-      formatted.url = axiosError.config?.url
-      formatted.method = axiosError.config?.method?.toUpperCase()
-    } else if (error instanceof Error) {
-      formatted.stack = error.stack
-    }
-
-    return formatted
+  private handlePermissionError(error: ApiError): void {
+    console.error('Permission error:', error);
+    toast.error('You do not have permission to perform this action.');
+    Sentry.captureMessage('Permission denied', 'warning');
   },
-}
 
-export default errorService
+  /**
+   * Handle 404 not found errors
+   */
+  private handleNotFoundError(error: ApiError): void {
+    console.error('Not found error:', error);
+    toast.error('The requested resource was not found.');
+    Sentry.captureMessage('Resource not found', 'info');
+  },
+
+  /**
+   * Handle 500 server errors
+   */
+  private handleServerError(error: ApiError): void {
+    console.error('Server error:', error);
+    toast.error('A server error occurred. Please try again later.');
+    Sentry.captureException(error);
+  },
+
+  /**
+   * Handle generic errors
+   */
+  private handleGenericError(error: any): void {
+    console.error('Error:', error);
+    const message = error?.message || 'An unexpected error occurred. Please try again.';
+    toast.error(message);
+    Sentry.captureException(error);
+  },
+};
