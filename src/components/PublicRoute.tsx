@@ -1,38 +1,37 @@
+import React from 'react'
 import { Navigate } from 'react-router-dom'
-import { useAuthStore } from '../stores/authStore'
+import { useAuth } from '../hooks/useAuth'
 
 interface PublicRouteProps {
   children: React.ReactNode
 }
 
 /**
- * 🌐 PublicRoute
- * 
- * Компонент для страниц, доступных только неавторизованным пользователям.
- * Авторизованные пользователи перенаправляются на главную страницу.
- * 
- * Использование:
- * ```tsx
- * <PublicRoute>
- *   <LoginPage />
- * </PublicRoute>
- * 
- * <PublicRoute>
- *   <RegisterPage />
- * </PublicRoute>
- * ```
+ * PublicRoute component
+ * Routes accessible only to unauthenticated users
+ * Redirects authenticated users to dashboard
  */
-export const PublicRoute = ({ children }: PublicRouteProps) => {
-  const { isAuthenticated } = useAuthStore((state) => ({
-    isAuthenticated: !!state.user,
-  }))
+export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth()
 
-  // ✅ Авторизованный пользователь → на главную
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full mb-4">
+            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          </div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
-  // 🌐 Неавторизованный → показываем страницу
+  // If user is already authenticated, redirect to dashboard
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   return <>{children}</>
 }
 
