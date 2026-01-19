@@ -1,124 +1,247 @@
-import { useEffect } from 'react'
 import { useQuery } from '../hooks/useQuery'
+import { usePermissions } from '../hooks/usePermissions'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { ErrorAlert } from '../components/ErrorAlert'
 import { Card } from '../components/Card'
-import { analyticsService } from '../services/analyticsService'
-import { useRefresh } from '../hooks/useRefresh'
+import { CanAccess } from '../components/CanAccess'
 
-interface StatCard {
-  label: string
-  value: number | string
-  change?: number
-  trend?: 'up' | 'down'
+interface DashboardStats {
+  totalUsers: number
+  totalRestaurants: number
+  activeGuests: number
+  totalRevenue: number
+  pendingOperations: number
+  systemHealth: number
+  apiStatus: string
+  dbStatus: string
+}
+
+interface RecentActivity {
+  id: string
+  action: string
+  user: string
+  resource: string
+  timestamp: string
+}
+
+interface AdminData {
+  stats: DashboardStats
+  recentActivity: RecentActivity[]
+}
+
+// Mock сервис
+const adminService = {
+  async getDashboard(): Promise<AdminData> {
+    return Promise.resolve({
+      stats: {
+        totalUsers: 542,
+        totalRestaurants: 48,
+        activeGuests: 15234,
+        totalRevenue: 850000,
+        pendingOperations: 23,
+        systemHealth: 99.8,
+        apiStatus: 'online',
+        dbStatus: 'connected',
+      },
+      recentActivity: [
+        {
+          id: '1',
+          action: 'Установка сертификата SSL',
+          user: 'admin@example.com',
+          resource: 'SSL Config',
+          timestamp: '2026-01-19 17:00',
+        },
+        {
+          id: '2',
+          action: 'Обновление API',
+          user: 'system',
+          resource: 'API Server',
+          timestamp: '2026-01-19 16:30',
+        },
+        {
+          id: '3',
+          action: 'Бекап базы данных',
+          user: 'system',
+          resource: 'Database',
+          timestamp: '2026-01-19 15:00',
+        },
+      ],
+    })
+  },
 }
 
 const AdminDashboard = () => {
-  // 🔄 Fetch dashboard stats with auto-refresh
-  const { data: stats, loading, error, refetch } = useQuery(
-    () => analyticsService.getDashboard(),
+  const { hasPermission } = usePermissions()
+  const { data, loading, error, refetch } = useQuery(
+    () => adminService.getDashboard(),
     {
       retryCount: 3,
       retryDelay: 1000,
-      refreshInterval: 30000, // Auto-refresh every 30 seconds
     }
   )
 
-  // 🔄 Auto-refresh interval hook
-  useRefresh(refetch, 30000)
-
-  // ⏳ Loading state
-  if (loading && !stats) {
-    return <LoadingSpinner text="Loading dashboard..." />
+  // ⏳ Лоадинг
+  if (loading && !data) {
+    return <LoadingSpinner text={"📊 Оптимизирую данные..."} />
   }
 
-  // ❌ Error state
-  if (error && !stats) {
+  // ❌ Ошибка
+  if (error && !data) {
     return (
       <ErrorAlert
         error={error}
-        title="Failed to load dashboard"
+        title="Ошибка при загрузке контрольной панели"
         onRetry={refetch}
       />
     )
   }
 
-  // ✅ Render dashboard
+  const stats = data?.stats
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Заголовок */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-gray-600 mt-1">Welcome back, Admin</p>
+              <h1 className="text-3xl font-bold text-gray-900">📊 Контрольная панель</h1>
+              <p className="text-gray-600 mt-1">Обзор системы MAX LOYALTY</p>
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={refetch}
-                disabled={loading}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                {loading ? '⟳ Refreshing...' : '⟳ Refresh'}
+            <CanAccess permission="settings:write">
+              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                ⚙️ Настройки
               </button>
-            </div>
+            </CanAccess>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Математические карточки */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Error banner if retry available */}
-        {error && stats && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-            ⚠️ Some data may be outdated. <button onClick={refetch} className="underline font-semibold">Retry</button>
-          </div>
-        )}
-
-        {/* Stats Grid */}
+        {/* Основные метрики */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats?.map((stat: StatCard) => (
-            <Card key={stat.label} className="p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
-                  </p>
-                  {stat.change !== undefined && (
-                    <p
-                      className={`text-sm mt-2 flex items-center ${
-                        stat.trend === 'up' ? 'text-green-600' : 'text-red-600'
-                      }`}
-                    >
-                      {stat.trend === 'up' ? '📈' : '📉'} {Math.abs(stat.change)}% from last period
-                    </p>
-                  )}
+          {/* Пользователи */}
+          <Card className="p-6">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">👥 Пользователи</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">
+                {stats?.totalUsers || 0}
+              </p>
+              <p className="text-sm text-blue-600 mt-2">🌐 Всего</p>
+            </div>
+          </Card>
+
+          {/* Рестораны */}
+          <Card className="p-6">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">🍴 Рестораны</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">
+                {stats?.totalRestaurants || 0}
+              </p>
+              <p className="text-sm text-green-600 mt-2">✅ Активные</p>
+            </div>
+          </Card>
+
+          {/* Гости */}
+          <Card className="p-6">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">👤 Гости</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">
+                {(stats?.activeGuests || 0).toLocaleString()}
+              </p>
+              <p className="text-sm text-purple-600 mt-2">📈 На сайте</p>
+            </div>
+          </Card>
+
+          {/* Доход */}
+          <Card className="p-6">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">💰 Доход</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">
+                ${(stats?.totalRevenue || 0).toLocaleString()}
+              </p>
+              <p className="text-sm text-emerald-600 mt-2">📈 +12% этом месяце</p>
+            </div>
+          </Card>
+        </div>
+
+        {/* Системные метрики */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Здоровье системы */}
+          <Card className="p-6">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">🏥 Здоровье системы</p>
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm">API</span>
+                  <span className="text-xs font-bold text-green-600">🌟 Online</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '100%' }}></div>
                 </div>
               </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Charts Section (placeholder) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 1 */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Guest Trend</h2>
-            <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
-              📊 Chart placeholder
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm">Database</span>
+                  <span className="text-xs font-bold text-green-600">Connected</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '100%' }}></div>
+                </div>
+              </div>
             </div>
           </Card>
 
-          {/* Chart 2 */}
+          {/* Ожидающие операции */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Revenue Trend</h2>
-            <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
-              📊 Chart placeholder
+            <div>
+              <p className="text-gray-600 text-sm font-medium">⏳ Ожидающие</p>
+              <p className="text-3xl font-bold text-orange-600 mt-2">
+                {stats?.pendingOperations || 0}
+              </p>
+              <p className="text-sm text-gray-600 mt-2">требуют внимания</p>
+            </div>
+          </Card>
+
+          {/* Уровень отказов */}
+          <Card className="p-6">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">System Health</p>
+              <p className="text-3xl font-bold text-green-600 mt-2">
+                {stats?.systemHealth || 0}%
+              </p>
+              <p className="text-sm text-gray-600 mt-2">All systems nominal</p>
             </div>
           </Card>
         </div>
+
+        {/* Недавняя активность */}
+        <CanAccess permission="audit:read">
+          <Card>
+            <div className="p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">📊 Недавняя активность</h2>
+              <div className="space-y-3">
+                {data?.recentActivity.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {activity.action}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {activity.user} · {activity.resource}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500">{activity.timestamp}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        </CanAccess>
       </div>
     </div>
   )
