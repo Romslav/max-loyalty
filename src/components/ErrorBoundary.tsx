@@ -1,78 +1,109 @@
-import React, { ReactNode } from 'react';
-import * as Sentry from '@sentry/react';
-import toast from 'react-hot-toast';
+import React, { ReactNode } from 'react'
+import * as Sentry from '@sentry/react'
+import { AlertTriangle } from 'lucide-react'
 
 interface Props {
-  children: ReactNode;
+  children: ReactNode
 }
 
 interface State {
-  hasError: boolean;
-  error?: Error;
+  hasError: boolean
+  error: Error | null
 }
 
 /**
- * Error Boundary component that catches errors in the component tree
- * and logs them to Sentry for monitoring
+ * ErrorBoundary component for catching and handling React errors
+ * Integrates with Sentry for error reporting
  */
-class ErrorBoundary extends React.Component<Props, State> {
+export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false };
+    super(props)
+    this.state = {
+      hasError: false,
+      error: null,
+    }
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return {
+      hasError: true,
+      error,
+    }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log to Sentry
+    // Log to console in development
+    console.error('ErrorBoundary caught an error:', error, errorInfo)
+
+    // Send to Sentry
     Sentry.captureException(error, {
       contexts: {
         react: {
           componentStack: errorInfo.componentStack,
         },
       },
-    });
+    })
+  }
 
-    // Show toast notification
-    toast.error('Something went wrong. Please refresh the page.');
-
-    // Log to console in development
-    if (import.meta.env.DEV) {
-      console.error('Error caught by boundary:', error, errorInfo);
-    }
+  handleReset = () => {
+    this.setState({ hasError: false, error: null })
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex h-screen items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <h1 className="mb-4 text-3xl font-bold text-gray-900">Oops!</h1>
-            <p className="mb-4 text-gray-600">Something went wrong. Please refresh the page.</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-            >
-              Refresh Page
-            </button>
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-50 to-red-100">
+          <div className="w-full max-w-md mx-auto px-4">
+            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+              <div className="flex justify-center mb-4">
+                <div className="bg-red-100 rounded-full p-4">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
+                </div>
+              </div>
+
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                Oops! Something went wrong
+              </h1>
+
+              <p className="text-gray-600 mb-4">
+                An unexpected error occurred. We've been notified and will investigate.
+              </p>
+
+              {import.meta.env.MODE === 'development' && this.state.error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded text-left">
+                  <p className="text-sm font-mono text-red-600 break-words">
+                    {this.state.error.toString()}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={this.handleReset}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                >
+                  Try Again
+                </button>
+
+                <button
+                  onClick={() => (window.location.href = '/')}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 transition font-medium"
+                >
+                  Go Home
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 mt-4">
+                Error ID: {this.state.error?.message?.substring(0, 8)}
+              </p>
+            </div>
           </div>
         </div>
-      );
+      )
     }
 
-    return this.props.children;
+    return this.props.children
   }
 }
 
-export default Sentry.withErrorBoundary(ErrorBoundary, {
-  fallback: (
-    <div className="flex h-screen items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="mb-4 text-3xl font-bold text-gray-900">Error</h1>
-        <p className="text-gray-600">An error occurred. Please try again.</p>
-      </div>
-    </div>
-  ),
-});
+export default Sentry.withErrorBoundary(ErrorBoundary, { fallback: <div>Error loading component</div> })
