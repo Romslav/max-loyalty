@@ -1,6 +1,9 @@
-import { useAuthStore } from '../stores/authStore';
+import { useMemo } from 'react'
+import { useAuth } from './useAuth'
 
-const ROLE_PERMISSIONS: Record<string, string[]> = {
+type UserRole = 'admin' | 'restaurant' | 'cashier' | 'guest'
+
+const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   admin: [
     'user:read',
     'user:write',
@@ -12,68 +15,106 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'guest:write',
     'guest:delete',
     'analytics:read',
-    'analytics:write',
     'billing:read',
     'billing:write',
-    'settings:read',
+    'audit:read',
+    'support:write',
     'settings:write',
   ],
   restaurant: [
     'restaurant:read',
     'guest:read',
     'guest:write',
-    'guest:delete',
-    'operations:read',
-    'operations:write',
     'analytics:read',
     'billing:read',
+    'operations:read',
+    'operations:write',
   ],
   cashier: [
     'guest:read',
     'operations:read',
     'operations:write',
+    'analytics:read',
   ],
   guest: [
     'guest:read',
+    'operations:read',
   ],
-};
+}
+
+export interface PermissionResult {
+  hasPermission: (permission: string) => boolean
+  hasAnyPermission: (permissions: string[]) => boolean
+  hasAllPermissions: (permissions: string[]) => boolean
+  hasRole: (role: UserRole) => boolean
+  canAccess: (requiredRole?: UserRole, requiredPermissions?: string[]) => boolean
+  userRole: UserRole | null
+  userPermissions: string[]
+}
 
 /**
- * Hook to check permissions based on user role
- * Returns functions to check if user has specific permissions or roles
+ * Hook for permission and role checking
+ * Integrates with auth context
  */
-export const usePermissions = () => {
-  const { user } = useAuthStore();
+export const usePermissions = (): PermissionResult => {
+  const { user } = useAuth()
 
-  const hasPermission = (permission: string): boolean => {
-    if (!user) return false;
-    const userPermissions = ROLE_PERMISSIONS[user.role] || [];
-    return userPermissions.includes(permission);
-  };
+  return useMemo(() => {
+    const userRole = user?.role as UserRole | null
+    const userPermissions = user?.permissions || []
 
-  const hasAnyPermission = (permissions: string[]): boolean => {
-    return permissions.some((permission) => hasPermission(permission));
-  };
+    return {
+      /**
+       * Check if user has specific permission
+       */
+      hasPermission: (permission: string): boolean => {
+        return userPermissions.includes(permission)
+      },
 
-  const hasAllPermissions = (permissions: string[]): boolean => {
-    return permissions.every((permission) => hasPermission(permission));
-  };
+      /**
+       * Check if user has ANY of the permissions
+       */
+      hasAnyPermission: (permissions: string[]): boolean => {
+        return permissions.some((perm) => userPermissions.includes(perm))
+      },
 
-  const hasRole = (role: string): boolean => {
-    return user?.role === role;
-  };
+      /**
+       * Check if user has ALL of the permissions
+       */
+      hasAllPermissions: (permissions: string[]): boolean => {
+        return permissions.every((perm) => userPermissions.includes(perm))
+      },
 
-  const hasAnyRole = (roles: string[]): boolean => {
-    return roles.some((role) => hasRole(role));
-  };
+      /**
+       * Check if user has specific role
+       */
+      hasRole: (role: UserRole): boolean => {
+        return userRole === role
+      },
 
-  return {
-    hasPermission,
-    hasAnyPermission,
-    hasAllPermissions,
-    hasRole,
-    hasAnyRole,
-    userRole: user?.role,
-    userPermissions: user ? ROLE_PERMISSIONS[user.role] || [] : [],
-  };
-};
+      /**
+       * Check if user can access resource
+       */
+      canAccess: (requiredRole?: UserRole, requiredPermissions?: string[]): boolean => {
+        if (!userRole) return false
+
+        // Check role requirement
+        if (requiredRole && userRole !== requiredRole) {
+          return false
+        }
+
+        // Check permissions requirement
+        if (requiredPermissions && requiredPermissions.length > 0) {
+          return requiredPermissions.every((perm) => userPermissions.includes(perm))
+        }
+
+        return true
+      },
+
+      userRole,
+      userPermissions,
+    }
+  }, [user?.permissions, user?.role])
+}
+
+export default usePermissions
