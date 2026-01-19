@@ -1,48 +1,144 @@
-import { create } from 'zustand'
-import { User, AuthToken } from '@types/index'
+import { create } from 'zustand';
+import { authService, LoginPayload, RegisterPayload, User } from '../services/authService';
 
-interface AuthStore {
-  user: User | null
-  token: AuthToken | null
-  loading: boolean
-  error: string | null
+export interface AuthState {
+  user: User | null;
+  token: string | null;
+  refreshToken: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
 
   // Actions
-  setUser: (user: User | null) => void
-  setToken: (token: AuthToken | null) => void
-  setLoading: (loading: boolean) => void
-  setError: (error: string | null) => void
-  logout: () => void
-  isAuthenticated: () => boolean
-  hasRole: (role: string | string[]) => boolean
+  setUser: (user: User | null) => void;
+  setToken: (token: string | null) => void;
+  setRefreshToken: (refreshToken: string | null) => void;
+  setError: (error: string | null) => void;
+  clearAuth: () => void;
+
+  // Async actions
+  login: (payload: LoginPayload) => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<void>;
+  logout: () => void;
+  refreshUserToken: () => Promise<void>;
+  initializeAuth: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthStore>((set, get) => ({
+const STORAGE_KEYS = {
+  TOKEN: 'max_loyalty_token',
+  REFRESH_TOKEN: 'max_loyalty_refresh_token',
+  USER: 'max_loyalty_user',
+};
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
-  loading: false,
+  refreshToken: null,
+  isAuthenticated: false,
+  isLoading: false,
   error: null,
 
   setUser: (user) => set({ user }),
   setToken: (token) => set({ token }),
-  setLoading: (loading) => set({ loading }),
+  setRefreshToken: (refreshToken) => set({ refreshToken }),
   setError: (error) => set({ error }),
 
+  clearAuth: () => {
+    set({
+      user: null,
+      token: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      error: null,
+    });
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.USER);
+  },
+
+  login: async (payload) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await authService.login(payload);
+      set({
+        user: response.user,
+        token: response.token,
+        refreshToken: response.refreshToken,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      localStorage.setItem(STORAGE_KEYS.TOKEN, response.token);
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.user));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      set({
+        error: message,
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  register: async (payload) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await authService.register(payload);
+      set({
+        user: response.user,
+        token: response.token,
+        refreshToken: response.refreshToken,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      localStorage.setItem(STORAGE_KEYS.TOKEN, response.token);
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.user));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Registration failed';
+      set({
+        error: message,
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
   logout: () => {
-    set({ user: null, token: null })
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
+    authService.logout();
+    get().clearAuth();
   },
 
-  isAuthenticated: () => {
-    const { token } = get()
-    return !!token?.access
+  refreshUserToken: async () => {
+    const { refreshToken } = get();
+    if (!refreshToken) return;
+
+    try {
+      const response = await authService.refreshToken(refreshToken);
+      set({
+        token: response.token,
+        refreshToken: response.refreshToken,
+      });
+      localStorage.setItem(STORAGE_KEYS.TOKEN, response.token);
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      get().clearAuth();
+    }
   },
 
-  hasRole: (roles) => {
-    const { user } = get()
-    if (!user) return false
-    const roleArray = Array.isArray(roles) ? roles : [roles]
-    return roleArray.includes(user.role)
+  initializeAuth: async () => {
+    const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+    const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+    const user = localStorage.getItem(STORAGE_KEYS.USER);
+
+    if (token && refreshToken && user) {
+      set({
+        token,
+        refreshToken,
+        user: JSON.parse(user),
+        isAuthenticated: true,
+      });
+    }
   },
-}))
+}));
