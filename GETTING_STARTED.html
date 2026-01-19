@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Max Loyalty - Getting Started</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #2b8a8a;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .step-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-top: 4px solid #2b8a8a;
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .step-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        }
+
+        .step-number {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            background: #2b8a8a;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .step-title {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .step-description {
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .code-block {
+            background: #f5f5f5;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            border-left: 3px solid #2b8a8a;
+            margin: 10px 0;
+        }
+
+        .credentials {
+            background: #f0f9ff;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #0066cc;
+            margin: 20px 0;
+        }
+
+        .credential-item {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            font-size: 0.95em;
+        }
+
+        .credential-label {
+            font-weight: 600;
+            color: #333;
+            min-width: 100px;
+        }
+
+        .credential-value {
+            color: #0066cc;
+            font-family: monospace;
+        }
+
+        .checklist {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-top: 30px;
+            border-left: 4px solid #10b981;
+        }
+
+        .checklist-title {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .checklist-item {
+            display: flex;
+            gap: 12px;
+            margin: 12px 0;
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 6px;
+        }
+
+        .checklist-icon {
+            font-size: 1.2em;
+            min-width: 30px;
+        }
+
+        .checklist-text {
+            flex: 1;
+            color: #666;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #2b8a8a;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1f6f70;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+            border: 2px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #eeeeee;
+        }
+
+        .warning {
+            background: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .warning-title {
+            font-weight: 600;
+            color: #b45309;
+            margin-bottom: 10px;
+        }
+
+        .warning-text {
+            color: #92400e;
+            font-size: 0.95em;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            padding: 20px;
+        }
+
+        .timeline {
+            display: flex;
+            gap: 0;
+            margin: 30px 0;
+            overflow-x: auto;
+            padding-bottom: 20px;
+        }
+
+        .timeline-item {
+            flex: 1;
+            min-width: 150px;
+            text-align: center;
+            position: relative;
+        }
+
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            width: 100%;
+            height: 2px;
+            background: #ddd;
+            z-index: -1;
+        }
+
+        .timeline-item:last-child::after {
+            display: none;
+        }
+
+        .timeline-circle {
+            width: 60px;
+            height: 60px;
+            background: #2b8a8a;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin: 0 auto 10px;
+            font-size: 1.2em;
+        }
+
+        .timeline-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .steps-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .timeline {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .timeline-item::after {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Max Loyalty</h1>
+            <p class="subtitle">Production-Ready Authentication System</p>
+            <p style="color: #999; margin-top: 10px;">День 1 of 24-day Production Roadmap</p>
+        </header>
+
+        <!-- Timeline -->
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="timeline-circle">1️⃣</div>
+                <div class="timeline-label">Install<br>Tools</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-circle">2️⃣</div>
+                <div class="timeline-label">Download<br>Code</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-circle">3️⃣</div>
+                <div class="timeline-label">Install<br>Dependencies</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-circle">4️⃣</div>
+                <div class="timeline-label">Run<br>Server</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-circle">5️⃣</div>
+                <div class="timeline-label">Test<br>App</div>
+            </div>
+        </div>
+
+        <!-- Steps -->
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-number">1️⃣</div>
+                <div class="step-title">Install Node.js</div>
+                <div class="step-description">Download and install Node.js (runtime for JavaScript)</div>
+                <div class="code-block">https://nodejs.org (LTS version)</div>
+                <div class="button-group">
+                    <a href="https://nodejs.org" class="btn btn-primary" target="_blank">Download Node.js</a>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">2️⃣</div>
+                <div class="step-title">Install Git</div>
+                <div class="step-description">Download and install Git to clone the repository</div>
+                <div class="code-block">https://git-scm.com/download</div>
+                <div class="button-group">
+                    <a href="https://git-scm.com/download" class="btn btn-primary" target="_blank">Download Git</a>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">3️⃣</div>
+                <div class="step-title">Verify Installation</div>
+                <div class="step-description">Check that Node.js and Git are installed correctly</div>
+                <div class="code-block">node --version<br>npm --version<br>git --version</div>
+            </div>
+        </div>
+
+        <!-- Clone Project -->
+        <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin: 30px 0;">
+            <h2 style="color: #2b8a8a; margin-bottom: 20px;">📥 Clone the Project</h2>
+            
+            <p style="color: #666; margin-bottom: 15px;"><strong>Open your terminal and run:</strong></p>
+            
+            <div class="code-block" style="font-size: 1em; padding: 20px;">
+# Navigate to where you want the project
+cd ~/Desktop
+
+# Clone the repository
+git clone https://github.com/Romslav/max-loyalty.git
+
+# Go to project folder
+cd max-loyalty
+
+# Switch to the new branch
+git checkout feat/auth-system
+            </div>
+        </div>
+
+        <!-- Install Dependencies -->
+        <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin: 30px 0;">
+            <h2 style="color: #2b8a8a; margin-bottom: 20px;">📦 Install Dependencies</h2>
+            
+            <p style="color: #666; margin-bottom: 15px;"><strong>In the same terminal, run:</strong></p>
+            
+            <div class="code-block" style="font-size: 1em; padding: 20px;">
+npm install
+            </div>
+            
+            <p style="color: #666; margin-top: 15px;">⏳ <strong>Wait 2-5 minutes</strong> (installs ~500 dependencies)</p>
+            
+            <p style="color: #10b981; margin-top: 15px; font-weight: 600;">✅ Success when you see: "added 500+ packages"</p>
+        </div>
+
+        <!-- Start Server -->
+        <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin: 30px 0;">
+            <h2 style="color: #2b8a8a; margin-bottom: 20px;">🚀 Start the Development Server</h2>
+            
+            <p style="color: #666; margin-bottom: 15px;"><strong>In the terminal, run:</strong></p>
+            
+            <div class="code-block" style="font-size: 1em; padding: 20px;">
+npm run dev
+            </div>
+            
+            <p style="color: #666; margin-top: 15px;">You should see:</p>
+            
+            <div class="code-block" style="font-size: 0.9em;">
+➜  Local:   http://localhost:5173/
+            </div>
+            
+            <p style="color: #2b8a8a; margin-top: 15px; font-weight: 600;">✅ Server is running! Keep this terminal open.</p>
+        </div>
+
+        <!-- Test Credentials -->
+        <div class="credentials">
+            <h2 style="color: #0066cc; margin-top: 0;">🔓 Test Accounts</h2>
+            
+            <div class="credential-item">
+                <div class="credential-label">👨‍💼 Admin:</div>
+                <div>
+                    <div class="credential-value">admin@test.com</div>
+                    <div class="credential-value">admin123</div>
+                </div>
+            </div>
+            
+            <div class="credential-item">
+                <div class="credential-label">🏢 Restaurant:</div>
+                <div>
+                    <div class="credential-value">restaurant@test.com</div>
+                    <div class="credential-value">restaurant123</div>
+                </div>
+            </div>
+            
+            <div class="credential-item">
+                <div class="credential-label">💳 Cashier:</div>
+                <div>
+                    <div class="credential-value">cashier@test.com</div>
+                    <div class="credential-value">cashier123</div>
+                </div>
+            </div>
+            
+            <div class="credential-item">
+                <div class="credential-label">👤 Guest:</div>
+                <div>
+                    <div class="credential-value">guest@test.com</div>
+                    <div class="credential-value">guest123</div>
+                </div>
+            </div>
+            
+            <p style="color: #0066cc; margin-top: 15px; font-size: 0.9em;">💡 Or create your own account on the registration page!</p>
+        </div>
+
+        <!-- Open in Browser -->
+        <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin: 30px 0;">
+            <h2 style="color: #2b8a8a; margin-bottom: 20px;">🌐 Open in Your Browser</h2>
+            
+            <p style="color: #666; margin-bottom: 15px;">Click the button or copy this URL:</p>
+            
+            <div class="code-block" style="font-size: 1em; padding: 20px;">
+http://localhost:5173/login
+            </div>
+            
+            <div class="button-group">
+                <a href="http://localhost:5173/login" class="btn btn-primary" target="_blank">Open App</a>
+                <button class="btn btn-secondary" onclick="copyToClipboard('http://localhost:5173/login')">Copy URL</button>
+            </div>
+        </div>
+
+        <!-- Checklist -->
+        <div class="checklist">
+            <div class="checklist-title">✅ You're Done If You See:</div>
+            
+            <div class="checklist-item">
+                <div class="checklist-icon">✓</div>
+                <div class="checklist-text"><strong>Login page</strong> with Email and Password fields</div>
+            </div>
+            
+            <div class="checklist-item">
+                <div class="checklist-icon">✓</div>
+                <div class="checklist-text"><strong>Can login</strong> with admin@test.com / admin123</div>
+            </div>
+            
+            <div class="checklist-item">
+                <div class="checklist-icon">✓</div>
+                <div class="checklist-text"><strong>Dashboard page</strong> with "Welcome, Admin User!" message</div>
+            </div>
+            
+            <div class="checklist-item">
+                <div class="checklist-icon">✓</div>
+                <div class="checklist-text"><strong>Can logout</strong> and login again</div>
+            </div>
+            
+            <div class="checklist-item">
+                <div class="checklist-icon">✓</div>
+                <div class="checklist-text"><strong>Can create</strong> a new account</div>
+            </div>
+        </div>
+
+        <!-- Warning -->
+        <div class="warning">
+            <div class="warning-title">⚠️ Common Issues</div>
+            <div class="warning-text">
+                <p><strong>• "npm: command not found"</strong> → Node.js not installed or not in PATH</p>
+                <p><strong>• "Port 5173 already in use"</strong> → Close other dev servers or use different port</p>
+                <p><strong>• "npm install" takes forever</strong> → Try: npm cache clean --force && npm install</p>
+                <p><strong>• Page won't load</strong> → Check if terminal still shows "Local: http://localhost:5173"</p>
+            </div>
+        </div>
+
+        <!-- Documentation Links -->
+        <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin: 30px 0; text-align: center;">
+            <h2 style="color: #2b8a8a; margin-bottom: 20px;">📚 Documentation</h2>
+            
+            <div class="button-group" style="justify-content: center;">
+                <a href="https://github.com/Romslav/max-loyalty/blob/feat/auth-system/SETUP_AUTH.md" class="btn btn-primary" target="_blank">Setup Guide (SETUP_AUTH.md)</a>
+                <a href="https://github.com/Romslav/max-loyalty/blob/feat/auth-system/QUICKSTART.md" class="btn btn-primary" target="_blank">Quick Start (QUICKSTART.md)</a>
+                <a href="https://github.com/Romslav/max-loyalty/blob/feat/auth-system/PROGRESS_TRACKER.md" class="btn btn-primary" target="_blank">Progress (PROGRESS_TRACKER.md)</a>
+                <a href="https://github.com/Romslav/max-loyalty/pull/1" class="btn btn-secondary" target="_blank">Pull Request #1</a>
+            </div>
+        </div>
+
+        <footer>
+            <p>🎉 <strong>Congratulations!</strong> You've successfully set up Max Loyalty!</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">Version 4.0.0 | Day 1 of 24-day Production Roadmap</p>
+        </footer>
+    </div>
+
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text);
+            alert('✅ Copied to clipboard!\n' + text);
+        }
+    </script>
+</body>
+</html>
