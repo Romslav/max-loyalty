@@ -1,97 +1,103 @@
-import axios, { AxiosInstance, AxiosError } from 'axios'
-import { ApiResponse } from '@types/index'
+import axios, { AxiosInstance, AxiosError } from 'axios';
+import { useAuthStore } from '../stores/authStore';
+import { errorService, ApiError } from './errorService';
+import { logger } from './loggerService';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '10000');
 
-const api: AxiosInstance = axios.create({
+/**
+ * Create axios instance with base config
+ */
+const axiosInstance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: API_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
-})
+});
 
-// Request Interceptor
-api.interceptors.request.use(
+/**
+ * Request interceptor: Add auth token to headers
+ */
+axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth_token')
+    const token = useAuthStore.getState().token;
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return config
+    logger.debug('API Request', {
+      method: config.method?.toUpperCase(),
+      url: config.url,
+    });
+    return config;
   },
   (error) => {
-    return Promise.reject(error)
+    logger.error('Request interceptor error', error);
+    return Promise.reject(error);
   }
-)
+);
 
-// Response Interceptor
-api.interceptors.response.use(
-  (response) => response.data,
-  (error: AxiosError) => {
+/**
+ * Response interceptor: Handle errors and token refresh
+ */
+axiosInstance.interceptors.response.use(
+  (response) => {
+    logger.debug('API Response', {
+      status: response.status,
+      url: response.config.url,
+    });
+    return response;
+  },
+  async (error: AxiosError) => {
+    const originalConfig = error.config;
+
+    logger.error('API Error', {
+      status: error.response?.status,
+      url: error.config?.url,
+      message: error.message,
+    });
+
+    // Handle 401 Unauthorized
     if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token')
-      window.location.href = '/auth/login'
+      const authStore = useAuthStore.getState();
+      if (authStore.refreshToken && originalConfig) {
+        try {
+          // Try to refresh token
+          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+            refreshToken: authStore.refreshToken,
+          });
+
+          const { token, refreshToken } = response.data;
+          authStore.setTokens(token, refreshToken);
+
+          // Retry original request with new token
+          originalConfig.headers.Authorization = `Bearer ${token}`;
+          return axiosInstance(originalConfig);
+        } catch (refreshError) {
+          logger.error('Token refresh failed', refreshError);
+          authStore.logout();
+          window.location.href = '/auth/login';
+          return Promise.reject(refreshError);
+        }
+      } else {
+        authStore.logout();
+        window.location.href = '/auth/login';
+      }
     }
-    return Promise.reject(error.response?.data || error.message)
+
+    // Create ApiError instance
+    const apiError = new ApiError(
+      error.response?.status || 500,
+      error.response?.data?.message || error.message,
+      error.response?.data
+    );
+
+    // Handle error with error service
+    errorService.handleError(apiError);
+
+    return Promise.reject(apiError);
   }
-)
+);
 
-// API Methods
-export const apiClient = {
-  // Auth
-  auth: {
-    login: (email: string, password: string) =>
-      api.post<any, ApiResponse>('/auth/login', { email, password }),
-    register: (data: any) =>
-      api.post<any, ApiResponse>('/auth/register', data),
-    refresh: () =>
-      api.post<any, ApiResponse>('/auth/refresh'),
-  },
-
-  // Guests
-  guests: {
-    getProfile: () =>
-      api.get<any, ApiResponse>('/guests/profile'),
-    updateProfile: (data: any) =>
-      api.put<any, ApiResponse>('/guests/profile', data),
-    getCard: (restaurantId: string) =>
-      api.get<any, ApiResponse>(`/guests/cards/${restaurantId}`),
-    getHistory: (limit: number = 20) =>
-      api.get<any, ApiResponse>('/guests/operations', { params: { limit } }),
-  },
-
-  // Restaurants
-  restaurants: {
-    getList: () =>
-      api.get<any, ApiResponse>('/restaurants'),
-    getById: (id: string) =>
-      api.get<any, ApiResponse>(`/restaurants/${id}`),
-    create: (data: any) =>
-      api.post<any, ApiResponse>('/restaurants', data),
-    update: (id: string, data: any) =>
-      api.put<any, ApiResponse>(`/restaurants/${id}`, data),
-  },
-
-  // Loyalty Cards
-  cards: {
-    create: (restaurantId: string, data: any) =>
-      api.post<any, ApiResponse>(`/restaurants/${restaurantId}/cards`, data),
-    scan: (code: string) =>
-      api.post<any, ApiResponse>('/cards/scan', { code }),
-    credit: (cardId: string, amount: number) =>
-      api.post<any, ApiResponse>(`/cards/${cardId}/credit`, { amount }),
-    debit: (cardId: string, amount: number) =>
-      api.post<any, ApiResponse>(`/cards/${cardId}/debit`, { amount }),
-  },
-
-  // Operations
-  operations: {
-    getList: (restaurantId: string) =>
-      api.get<any, ApiResponse>(`/restaurants/${restaurantId}/operations`),
-    create: (data: any) =>
-      api.post<any, ApiResponse>('/operations', data),
-  },
-}
-
-export default api
+export default axiosInstance;
