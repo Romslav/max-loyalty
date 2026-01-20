@@ -1,171 +1,140 @@
-import { useState, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { authService, LoginRequest, RegisterRequest, AuthResponse } from '../services/authService'
-import { logger } from '../services/loggerService'
+import { useCallback } from 'react';
+import { useStore } from '@/stores/useStore';
+import { api } from '@/services/api';
+import { toast } from 'react-hot-toast';
 
-export interface AuthState {
-  user: AuthResponse['user'] | null
-  isAuthenticated: boolean
-  isLoading: boolean
-  error: string | null
+interface LoginCredentials {
+  email: string;
+  password: string;
 }
 
-/**
- * Custom hook for authentication
- * Manages login, register, logout, and auth state
- */
+interface RegisterCredentials extends LoginCredentials {
+  name: string;
+  role?: string;
+}
+
 export const useAuth = () => {
-  const navigate = useNavigate()
-  const [state, setState] = useState<AuthState>({
-    user: authService.getUser(),
-    isAuthenticated: authService.isAuthenticated(),
-    isLoading: false,
-    error: null,
-  })
+  const { user, isAuthenticated, setUser, setAuthenticated, logout: storeLogout } = useStore();
 
-  /**
-   * Initialize auth state on mount
-   */
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const token = authService.getToken()
-        if (token) {
-          // Verify token is valid by fetching current user
-          const user = await authService.getCurrentUser()
-          setState({
-            user,
-            isAuthenticated: true,
-            isLoading: false,
-            error: null,
-          })
-          logger.info('Auth initialized', { userId: user.id })
-        }
-      } catch (error) {
-        logger.error('Auth initialization failed', { error })
-        authService.clearAuth()
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: null,
-        })
-      }
-    }
-
-    initializeAuth()
-  }, [])
-
-  /**
-   * Handle login
-   */
   const login = useCallback(
-    async (credentials: LoginRequest) => {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }))
+    async (credentials: LoginCredentials) => {
       try {
-        const response = await authService.login(credentials)
-        setState({
-          user: response.user,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        })
-        logger.info('Login successful', { userId: response.user.id })
-        // Redirect to dashboard
-        navigate('/dashboard')
-        return response
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Login failed'
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: errorMessage,
-        })
-        logger.error('Login failed', { error: errorMessage })
-        throw error
+        const response = await api.post('/auth/login', credentials);
+        const { user, token } = response.data;
+
+        // Save token to localStorage
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+
+        // Update store
+        setUser(user);
+        setAuthenticated(true);
+
+        toast.success(`Добро пожаловать, ${user.name}!`);
+        return { success: true, user };
+      } catch (error: any) {
+        const message = error.response?.data?.message || 'Ошибка при входе';
+        toast.error(message);
+        return { success: false, error: message };
       }
     },
-    [navigate]
-  )
+    [setUser, setAuthenticated]
+  );
 
-  /**
-   * Handle registration
-   */
   const register = useCallback(
-    async (data: RegisterRequest) => {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }))
+    async (credentials: RegisterCredentials) => {
       try {
-        const response = await authService.register(data)
-        setState({
-          user: response.user,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        })
-        logger.info('Registration successful', { userId: response.user.id })
-        // Redirect to dashboard
-        navigate('/dashboard')
-        return response
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Registration failed'
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: errorMessage,
-        })
-        logger.error('Registration failed', { error: errorMessage })
-        throw error
+        const response = await api.post('/auth/register', credentials);
+        const { user, token } = response.data;
+
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+
+        setUser(user);
+        setAuthenticated(true);
+
+        toast.success('Аккаунт успешно создан!');
+        return { success: true, user };
+      } catch (error: any) {
+        const message = error.response?.data?.message || 'Ошибка при регистрации';
+        toast.error(message);
+        return { success: false, error: message };
       }
     },
-    [navigate]
-  )
+    [setUser, setAuthenticated]
+  );
 
-  /**
-   * Handle logout
-   */
   const logout = useCallback(async () => {
-    setState((prev) => ({ ...prev, isLoading: true }))
     try {
-      await authService.logout()
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null,
-      })
-      logger.info('Logout successful')
-      // Redirect to login
-      navigate('/login')
+      await api.post('/auth/logout');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Logout failed'
-      logger.error('Logout failed', { error: errorMessage })
-      // Still clear auth data even if logout API fails
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null,
-      })
-      navigate('/login')
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      storeLogout();
+      toast.success('Вы вышли из системы');
     }
-  }, [navigate])
+  }, [storeLogout]);
 
-  /**
-   * Clear error message
-   */
-  const clearError = useCallback(() => {
-    setState((prev) => ({ ...prev, error: null }))
-  }, [])
+  const refreshToken = useCallback(async () => {
+    try {
+      const response = await api.post('/auth/refresh');
+      const { token } = response.data;
+
+      localStorage.setItem('auth_token', token);
+      return { success: true, token };
+    } catch (error: any) {
+      console.error('Token refresh error:', error);
+      await logout();
+      return { success: false, error: error.message };
+    }
+  }, [logout]);
+
+  const updateProfile = useCallback(
+    async (profileData: Record<string, any>) => {
+      try {
+        const response = await api.patch('/auth/profile', profileData);
+        const updatedUser = response.data;
+
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+
+        toast.success('Профиль обновлен');
+        return { success: true, user: updatedUser };
+      } catch (error: any) {
+        const message = error.response?.data?.message || 'Ошибка при обновлении профиля';
+        toast.error(message);
+        return { success: false, error: message };
+      }
+    },
+    [setUser]
+  );
+
+  const changePassword = useCallback(async (oldPassword: string, newPassword: string) => {
+    try {
+      await api.patch('/auth/change-password', {
+        oldPassword,
+        newPassword,
+      });
+
+      toast.success('Пароль успешно изменен');
+      return { success: true };
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Ошибка при изменении пароля';
+      toast.error(message);
+      return { success: false, error: message };
+    }
+  }, []);
 
   return {
-    ...state,
+    user,
+    isAuthenticated,
     login,
     register,
     logout,
-    clearError,
-  }
-}
-
-export default useAuth
+    refreshToken,
+    updateProfile,
+    changePassword,
+  };
+};
