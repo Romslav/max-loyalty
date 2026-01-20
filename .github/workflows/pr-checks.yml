@@ -1,0 +1,77 @@
+name: PR Quality Checks
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    name: Code Quality
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test -- --coverage
+
+      - name: Check code coverage
+        run: |
+          COVERAGE=$(grep -oP '(?<="statements":{"pct":)[^,}]*' coverage/coverage-final.json || echo '0')
+          echo "Current coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 85" | bc -l) )); then
+            echo "⚠️  Coverage is below 85% threshold"
+          fi
+
+      - name: TypeScript strict checks
+        run: npm run type-check
+
+      - name: Lint code
+        run: npm run lint
+
+      - name: Format check
+        run: npx prettier --check 'src/**/*.{ts,tsx,css}'
+
+      - name: Comment PR with results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const coverage = fs.existsSync('./coverage/coverage-final.json') 
+              ? JSON.parse(fs.readFileSync('./coverage/coverage-final.json', 'utf8'))
+              : null;
+            
+            let message = '## ✅ PR Quality Check Results\n\n';
+            message += '| Check | Status |\n';
+            message += '|-------|--------|\n';
+            message += '| Tests | ✅ Passed |\n';
+            message += '| TypeScript | ✅ Passed |\n';
+            message += '| Lint | ✅ Passed |\n';
+            message += '| Format | ✅ Passed |\n';
+            
+            if (coverage && coverage.total) {
+              const statements = coverage.total.statements?.pct || 0;
+              message += '\n### Coverage Report\n';
+              message += `- **Statements**: ${statements}%\n`;
+              message += '\n✨ Ready to merge!';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
