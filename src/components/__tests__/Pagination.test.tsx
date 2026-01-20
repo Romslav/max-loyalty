@@ -31,8 +31,8 @@ describe('Pagination Component', () => {
       />
     )
 
-    const prevButton = screen.getByText('← Previous')
-    expect(prevButton).toBeDisabled()
+    const prevButton = screen.getByText('← Previous') as HTMLButtonElement
+    expect(prevButton.disabled).toBe(true)
   })
 
   it('should disable next button on last page', () => {
@@ -44,8 +44,8 @@ describe('Pagination Component', () => {
       />
     )
 
-    const nextButton = screen.getByText('Next →')
-    expect(nextButton).toBeDisabled()
+    const nextButton = screen.getByText('Next →') as HTMLButtonElement
+    expect(nextButton.disabled).toBe(true)
   })
 
   it('should call onPageChange when clicking page number', () => {
@@ -145,13 +145,13 @@ describe('Pagination Component', () => {
       />
     )
 
-    const prevButton = screen.getByText('← Previous')
-    const nextButton = screen.getByText('Next →')
-    const page1Button = screen.getByText('1')
+    const prevButton = screen.getByText('← Previous') as HTMLButtonElement
+    const nextButton = screen.getByText('Next →') as HTMLButtonElement
+    const page1Button = screen.getByText('1') as HTMLButtonElement
 
-    expect(prevButton).toBeDisabled()
-    expect(nextButton).toBeDisabled()
-    expect(page1Button).toBeDisabled()
+    expect(prevButton.disabled).toBe(true)
+    expect(nextButton.disabled).toBe(true)
+    expect(page1Button.disabled).toBe(true)
   })
 
   it('should handle large page numbers', () => {
@@ -166,5 +166,19 @@ describe('Pagination Component', () => {
     expect(screen.getByText('1')).toBeInTheDocument()
     expect(screen.getByText('100')).toBeInTheDocument()
     expect(screen.getByText('Page 50 of 100')).toBeInTheDocument()
+  })
+
+  it('should render middle pages correctly', () => {
+    render(
+      <Pagination
+        currentPage={5}
+        totalPages={10}
+        onPageChange={mockOnPageChange}
+      />
+    )
+
+    // Should show current page and nearby pages
+    expect(screen.getByText('5')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
   })
 })
