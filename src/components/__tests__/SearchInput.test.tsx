@@ -2,10 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SearchInput } from '../SearchInput'
 
 describe('SearchInput Component', () => {
-  const mockOnChange = vi.fn()
-
   beforeEach(() => {
-    mockOnChange.mockClear()
     vi.useFakeTimers()
   })
 
@@ -15,6 +12,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should render input field', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         placeholder="Search items..."
@@ -28,6 +26,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should use default placeholder', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value=""
@@ -40,6 +39,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should update local input value immediately on typing', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value=""
@@ -54,6 +54,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should debounce onChange callback', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value=""
@@ -76,6 +77,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should cancel previous debounce on quick typing', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value=""
@@ -101,6 +103,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should show clear button when input has value', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value="test"
@@ -113,6 +116,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should not show clear button when input is empty', () => {
+    const mockOnChange = vi.fn()
     const { queryByLabelText } = render(
       <SearchInput
         value=""
@@ -125,6 +129,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should clear input when clicking clear button', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value="test"
@@ -141,6 +146,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should call onChange with empty string when clearing', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value="test"
@@ -157,6 +163,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should update input when value prop changes', () => {
+    const mockOnChange = vi.fn()
     const { rerender } = render(
       <SearchInput
         value="initial"
@@ -178,6 +185,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should render search icon', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value=""
@@ -189,6 +197,7 @@ describe('SearchInput Component', () => {
   })
 
   it('should respect custom debounce delay', () => {
+    const mockOnChange = vi.fn()
     render(
       <SearchInput
         value=""
