@@ -2,6 +2,9 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from '@components/layout/MainLayout'
 import AdminDashboard from '@pages/admin/AdminDashboard'
+import { AuditLogs } from '@pages/admin/AuditLogs'
+import { SupportTickets } from '@pages/admin/SupportTickets'
+import { SystemSettings } from '@pages/admin/SystemSettings'
 
 // Placeholder pages (будут заменены на реальные)
 const Placeholder = ({ name }: { name: string }) => (
@@ -39,14 +42,29 @@ export const AppRoutes = () => {
           path="/admin/analytics"
           element={<Placeholder name="Аналитика" />}
         />
-        <Route path="/admin/audit" element={<Placeholder name="Логи аудита" />} />
+        <Route
+          path="/admin/audit"
+          element={
+            <MainLayout>
+              <AuditLogs />
+            </MainLayout>
+          }
+        />
         <Route
           path="/admin/support"
-          element={<Placeholder name="Поддержка" />}
+          element={
+            <MainLayout>
+              <SupportTickets />
+            </MainLayout>
+          }
         />
         <Route
           path="/admin/settings"
-          element={<Placeholder name="Настройки" />}
+          element={
+            <MainLayout>
+              <SystemSettings />
+            </MainLayout>
+          }
         />
 
         {/* Restaurant Routes */}
