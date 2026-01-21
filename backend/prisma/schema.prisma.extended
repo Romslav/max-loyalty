@@ -1,0 +1,206 @@
+// ============================================
+// EXTENDED PRISMA SCHEMA - PHASE 2
+// Loyalty Tiers & Rewards System
+// ============================================
+
+// ADD TO EXISTING schema.prisma:
+
+// ============================================
+// LOYALTY TIERS (New Table)
+// ============================================
+
+model LoyaltyTier {
+  id                    String    @id @default(cuid())
+  restaurantId          String    // FK to Restaurant
+  restaurant            Restaurant @relation("RestaurantTiers", fields: [restaurantId], references: [id], onDelete: Cascade)
+  
+  // Tier details
+  name                  String    // "Silver", "Gold", "Platinum"
+  level                 Int       // 1, 2, 3, 4
+  color                 String    @default("#808080") // Hex color for UI
+  icon                  String?   // URL to icon
+  
+  // Thresholds
+  minPointsRequired     Int       // Points needed to reach this tier
+  minSpendRequired      Float?    // Alternative: spend amount
+  minTransactionsRequired Int?    // Alternative: transaction count
+  
+  // Multipliers & Benefits
+  pointsMultiplier      Float     @default(1.0) // 1.0x, 1.2x, 1.5x
+  bonusPointsPerMonth   Int       @default(0)   // Free points each month
+  discountPercentage    Float     @default(0)   // Additional discount %
+  
+  // Features
+  features              String[]  // ["priority_support", "vip_line", "special_events"]
+  
+  // Status
+  isActive              Boolean   @default(true)
+  isDefault             Boolean   @default(false) // Initial tier for new cards
+  
+  // Timestamps
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  // Relations
+  guestCards            GuestCard[] @relation("CardTiers")
+  tierUpgrades          TierUpgradeHistory[]
+  
+  @@unique([restaurantId, level])
+  @@index([restaurantId])
+  @@index([minPointsRequired])
+}
+
+// ============================================
+// TIER UPGRADE HISTORY (Audit Trail)
+// ============================================
+
+model TierUpgradeHistory {
+  id                    String    @id @default(cuid())
+  cardId                String
+  guestCard             GuestCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  fromTierId            String
+  fromTier              LoyaltyTier @relation("FromTier", fields: [fromTierId], references: [id])
+  
+  toTierId              String
+  toTier                LoyaltyTier @relation("ToTier", fields: [toTierId], references: [id])
+  
+  // Trigger
+  triggerType           String    // "POINTS_THRESHOLD", "SPEND_THRESHOLD", "ADMIN_UPGRADE", "TIME_BASED"
+  triggerValue          Int?      // Points/Spend/Transactions that triggered upgrade
+  
+  // Metadata
+  reason                String?
+  upgradedAt            DateTime  @default(now())
+  upgradedBy            String?   // Admin user who triggered (if manual)
+  
+  @@index([cardId])
+  @@index([fromTierId])
+  @@index([toTierId])
+  @@index([upgradedAt])
+}
+
+// ============================================
+// REWARDS (New Table)
+// ============================================
+
+model Reward {
+  id                    String    @id @default(cuid())
+  restaurantId          String
+  restaurant            Restaurant @relation("RestaurantRewards", fields: [restaurantId], references: [id], onDelete: Cascade)
+  
+  // Reward details
+  name                  String    // "Free Coffee", "10% Discount", "Dessert"
+  description           String?
+  image                 String?   // URL to image
+  category              String    // "FOOD", "DISCOUNT", "EXPERIENCE", "MERCHANDISE"
+  
+  // Point cost
+  pointsRequired        Int       // How many points to redeem
+  
+  // Availability
+  quantity              Int?      // NULL = unlimited
+  quantityRedeemed      Int       @default(0)
+  
+  // Time limits
+  validFrom             DateTime
+  validUntil            DateTime
+  redeemDeadline        DateTime? // Days after redemption to use
+  
+  // Tier restrictions
+  minTierLevel          Int       @default(1) // Minimum tier to access
+  allowedTiers          String[]  // Specific tiers: ["GOLD", "PLATINUM"]
+  
+  // Status & Meta
+  isActive              Boolean   @default(true)
+  isFeatured            Boolean   @default(false)
+  priority              Int       @default(0)   // Higher = shown first
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  // Relations
+  redemptions           RewardRedemption[]
+  
+  @@index([restaurantId])
+  @@index([validUntil])
+  @@index([minTierLevel])
+}
+
+// ============================================
+// REWARD REDEMPTIONS (Transactions for Rewards)
+// ============================================
+
+model RewardRedemption {
+  id                    String    @id @default(cuid())
+  cardId                String
+  guestCard             GuestCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  rewardId              String
+  reward                Reward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  
+  // Redemption details
+  pointsSpent           Int
+  code                  String    @unique // Redemption code (e.g., "REWARD-ABC123")
+  status                String    @default("PENDING") // PENDING, USED, EXPIRED, CANCELLED
+  
+  // Usage tracking
+  redeemedAt            DateTime  @default(now())
+  usedAt                DateTime? // When customer actually used the reward
+  usedBy                String?   // Staff member who processed
+  expiresAt             DateTime
+  
+  // Notes
+  notes                 String?
+  
+  // Metadata
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  @@unique([cardId, rewardId])
+  @@index([cardId])
+  @@index([rewardId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// ============================================
+// UPDATES TO EXISTING MODELS
+// ============================================
+
+// UPDATE GuestCard:
+// Add these fields:
+/*
+  tierId              String?
+  tier                LoyaltyTier? @relation("CardTiers", fields: [tierId], references: [id])
+  
+  tierUpgradeHistory  TierUpgradeHistory[]
+  rewardRedemptions   RewardRedemption[]
+  
+  // Last tier check (for optimization)
+  lastTierCheckAt     DateTime?
+*/
+
+// UPDATE Restaurant:
+// Add these fields:
+/*
+  loyaltyTiers        LoyaltyTier[] @relation("RestaurantTiers")
+  rewards             Reward[] @relation("RestaurantRewards")
+  
+  // Configuration
+  pointsPerPurchase   Int @default(100) // 100 cents = 1 point
+  tierUpgradePolicy   String @default("AUTOMATIC") // AUTOMATIC, MANUAL, BOTH
+  rewardRedemptionPolicy String @default("MANUAL") // MANUAL, AUTO_APPLY, BOTH
+*/
+
+// ============================================
+// DATABASE INDEXES (Critical for Performance)
+// ============================================
+
+/*
+CREATE INDEX idx_loyalty_tier_restaurant_level ON "LoyaltyTier"("restaurantId", "level");
+CREATE INDEX idx_tier_upgrade_card_date ON "TierUpgradeHistory"("cardId", "upgradedAt" DESC);
+CREATE INDEX idx_reward_restaurant_active ON "Reward"("restaurantId", "isActive", "validUntil");
+CREATE INDEX idx_reward_redemption_card_status ON "RewardRedemption"("cardId", "status");
+CREATE INDEX idx_reward_redemption_expiry ON "RewardRedemption"("expiresAt") WHERE status != 'USED';
+*/
