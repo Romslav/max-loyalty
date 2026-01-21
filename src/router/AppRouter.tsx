@@ -16,6 +16,8 @@ import UserManagement from '../pages/UserManagement'
 import AuditLogs from '../pages/AuditLogs'
 import SupportTickets from '../pages/SupportTickets'
 import SystemSettings from '../pages/SystemSettings'
+import AdvancedAnalyticsPage from '../pages/AdvancedAnalyticsPage'
+import NotificationSettingsPage from '../pages/NotificationSettingsPage'
 
 // Restaurant pages
 import RestaurantDashboard from '../pages/RestaurantDashboard'
@@ -122,6 +124,22 @@ export const AppRouter: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/analytics/advanced"
+          element={
+            <ProtectedRoute requiredRoles={['admin']}>
+              <AdvancedAnalyticsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/notifications"
+          element={
+            <ProtectedRoute requiredRoles={['admin']}>
+              <NotificationSettingsPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Restaurant routes - requires restaurant or admin role */}
         <Route
@@ -145,6 +163,14 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute requiredRoles={['restaurant', 'admin']}>
               <AnalyticsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/restaurant/analytics/advanced"
+          element={
+            <ProtectedRoute requiredRoles={['restaurant', 'admin']}>
+              <AdvancedAnalyticsPage />
             </ProtectedRoute>
           }
         />
