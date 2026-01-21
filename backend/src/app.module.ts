@@ -9,6 +9,8 @@ import { TransactionModule } from './modules/transaction/transaction.module';
 import { RestaurantModule } from './modules/restaurant/restaurant.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { LoyaltyTierModule } from './modules/loyalty-tier/loyalty-tier.module';
+import { RewardModule } from './modules/reward/reward.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { NotificationModule } from './modules/notification/notification.module';
     RestaurantModule,
     TelegramModule,
     NotificationModule,
+    LoyaltyTierModule,
+    RewardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
