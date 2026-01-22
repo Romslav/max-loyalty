@@ -5,7 +5,7 @@
 import type { IGuestRepository } from '../../domain/repositories';
 import type { Guest, GuestStatistics, CreateGuestInput, UpdateGuestInput, GuestFilters } from '../../domain/entities';
 import { httpClient } from '../http/HttpClient';
-import type { GuestDto, GuestStatisticsDto, GuestsListResponseDto, mapGuestToDto, mapGuestStatisticsToDto } from '../dtos';
+import type { GuestDto, GuestStatisticsDto, GuestsListResponseDto } from '../dtos';
 
 const API_ENDPOINT = '/guests';
 
