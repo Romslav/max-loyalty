@@ -1,7 +1,7 @@
 <template>
   <transition name="fade">
     <div v-if="modelValue" :class="['alert', `alert--${type}`]" role="alert">
-      <div class="alert__icon">{{ getIcon() }}</div>
+      <div class="alert__icon">{{ getIcon(type) }}</div>
       <div class="alert__content">
         <p class="alert__title">{{ title }}</p>
         <p v-if="message" class="alert__message">{{ message }}</p>
@@ -12,6 +12,12 @@
 </template>
 
 <script setup lang="ts">
+define Props<AppAlertProps>();
+
+defineEmits<{
+  'update:modelValue': [value: boolean];
+}>();
+
 export interface AppAlertProps {
   modelValue: boolean;
   type?: 'success' | 'error' | 'warning' | 'info';
@@ -20,20 +26,17 @@ export interface AppAlertProps {
   closeable?: boolean;
 }
 
-defineProps<AppAlertProps>();
-
-defineEmits<{
-  'update:modelValue': [value: boolean];
-}>();
-
-function getIcon() {
+/**
+ * Получить icon для типа alert
+ */
+function getIcon(type: string = 'info'): string {
   const icons: Record<string, string> = {
     success: '✓',
     error: '✕',
     warning: '⚠',
     info: 'ℹ',
   };
-  return icons[arguments[0]] || '•';
+  return icons[type] || '•';
 }
 </script>
 
