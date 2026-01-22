@@ -9,6 +9,9 @@ export interface HttpClientConfig {
   timeout: number;
 }
 
+// Проверка доступности браузерных API
+const isBrowser = (): boolean => typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+
 export class HttpClient {
   private client: AxiosInstance;
   private readonly MAX_RETRIES = 3;
@@ -97,13 +100,18 @@ export class HttpClient {
    * Обновить access token
    */
   setAccessToken(token: string): void {
-    localStorage.setItem('accessToken', token);
+    if (isBrowser()) {
+      localStorage.setItem('accessToken', token);
+    }
   }
 
   /**
    * Получить access token
    */
   private getAccessToken(): string | null {
+    if (!isBrowser()) {
+      return null;
+    }
     return localStorage.getItem('accessToken');
   }
 
@@ -111,13 +119,19 @@ export class HttpClient {
    * Обновить refresh token
    */
   setRefreshToken(token: string): void {
-    localStorage.setItem('refreshToken', token);
+    if (isBrowser()) {
+      localStorage.setItem('refreshToken', token);
+    }
   }
 
   /**
    * Обработка 401 ошибки
    */
   private async handleUnauthorized(): Promise<void> {
+    if (!isBrowser()) {
+      return;
+    }
+    
     // TODO: требуется реализация refresh логики
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
