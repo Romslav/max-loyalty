@@ -27,6 +27,42 @@ import {
 
 // HTTP Client
 import { HttpClient } from '../http/HttpClient';
+import type { IOperationRepository } from '@/domain/repositories';
+
+/**
+ * Stub Implementation of IOperationRepository
+ * TODO: Replace with actual HttpOperationRepository when backend ready
+ */
+class StubOperationRepository implements IOperationRepository {
+  async create(_data: any): Promise<any> {
+    console.warn('StubOperationRepository.create called - not implemented');
+    return {};
+  }
+
+  async findById(_id: string): Promise<any> {
+    console.warn('StubOperationRepository.findById called - not implemented');
+    return null;
+  }
+
+  async findByGuestId(_guestId: string): Promise<any[]> {
+    console.warn('StubOperationRepository.findByGuestId called - not implemented');
+    return [];
+  }
+
+  async findByRestaurantId(_restaurantId: string): Promise<any[]> {
+    console.warn('StubOperationRepository.findByRestaurantId called - not implemented');
+    return [];
+  }
+
+  async update(_id: string, _data: any): Promise<any> {
+    console.warn('StubOperationRepository.update called - not implemented');
+    return {};
+  }
+
+  async delete(_id: string): Promise<void> {
+    console.warn('StubOperationRepository.delete called - not implemented');
+  }
+}
 
 /**
  * DI Container - Singleton instances
@@ -38,6 +74,7 @@ class DIContainer {
   // Repositories
   private _userRepository: HttpUserRepository | null = null;
   private _guestRepository: HttpGuestRepository | null = null;
+  private _operationRepository: IOperationRepository | null = null;
 
   // ========== User Use Cases ==========
   private _loginUseCase: LoginUseCase | null = null;
@@ -83,6 +120,17 @@ class DIContainer {
       this._guestRepository = new HttpGuestRepository(this.httpClient);
     }
     return this._guestRepository;
+  }
+
+  /**
+   * Получить Operation Repository
+   * TODO: Replace with HttpOperationRepository when available
+   */
+  get operationRepository(): IOperationRepository {
+    if (!this._operationRepository) {
+      this._operationRepository = new StubOperationRepository();
+    }
+    return this._operationRepository;
   }
 
   // ============================================================================
@@ -160,7 +208,7 @@ class DIContainer {
     if (!this._earnPointsUseCase) {
       this._earnPointsUseCase = new EarnPointsUseCase(
         this.guestRepository,
-        this.guestRepository as any // TODO: Add OperationRepository
+        this.operationRepository
       );
     }
     return this._earnPointsUseCase;
@@ -173,7 +221,7 @@ class DIContainer {
     if (!this._redeemPointsUseCase) {
       this._redeemPointsUseCase = new RedeemPointsUseCase(
         this.guestRepository,
-        this.guestRepository as any // TODO: Add OperationRepository
+        this.operationRepository
       );
     }
     return this._redeemPointsUseCase;
@@ -186,7 +234,7 @@ class DIContainer {
     if (!this._getGuestStatisticsUseCase) {
       this._getGuestStatisticsUseCase = new GetGuestStatisticsUseCase(
         this.guestRepository,
-        this.guestRepository as any // TODO: Add OperationRepository
+        this.operationRepository
       );
     }
     return this._getGuestStatisticsUseCase;
@@ -202,7 +250,7 @@ class DIContainer {
   get getOperationHistoryUseCase(): GetOperationHistoryUseCase {
     if (!this._getOperationHistoryUseCase) {
       this._getOperationHistoryUseCase = new GetOperationHistoryUseCase(
-        this.guestRepository as any // TODO: Add OperationRepository
+        this.operationRepository
       );
     }
     return this._getOperationHistoryUseCase;
@@ -210,6 +258,6 @@ class DIContainer {
 }
 
 /**
- * Глобальный singleton инстанциа container
+ * Глобальный singleton инстанция container
  */
 export const container = new DIContainer();
