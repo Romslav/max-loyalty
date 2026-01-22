@@ -68,7 +68,7 @@ export function normalizeCreateUserInput(input: CreateUserInput): CreateUserInpu
 export function validateUpdateUserInput(input: UpdateUserInput): void {
   const errors: Array<{ field: string; message: string }> = [];
 
-  // Проверить email если проверить проверить проверить email если
+  // Проверить email если необходимо
   if (input.email !== undefined) {
     try {
       validateEmail(input.email);
@@ -77,14 +77,14 @@ export function validateUpdateUserInput(input: UpdateUserInput): void {
     }
   }
 
-  // Проверить name если проверить проверить name если
+  // Проверить name если необходимо
   if (input.name !== undefined) {
     if (input.name.length < 2 || input.name.length > 100) {
       errors.push({ field: 'name', message: 'Name must be between 2 and 100 characters' });
     }
   }
 
-  // Проверить пароль если проверить проверить пароль если
+  // Проверить пароль если необходимо
   if (input.password !== undefined) {
     try {
       validatePassword(input.password);
