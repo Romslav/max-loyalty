@@ -9,6 +9,7 @@ export interface UserDto {
   email: string;
   name: string;
   role: UserRole;
+  restaurantId?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -39,6 +40,7 @@ export interface UpdateUserRequestDto {
   email?: string;
   password?: string;
   isActive?: boolean;
+  restaurantId?: string;
 }
 
 export interface UsersListResponseDto {
@@ -55,6 +57,7 @@ export function mapUserToDto(user: User): UserDto {
     email: user.email,
     name: user.name,
     role: user.role,
+    restaurantId: user.restaurantId,
     isActive: user.isActive,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
