@@ -1,7 +1,7 @@
 /**
  * DI Container - Dependency Injection Container
  * 
- * Определяет все зависимости для депенденси инжекшн
+ * Централизованное место для всех зависимостей
  */
 
 // Repositories
@@ -10,10 +10,19 @@ import { HttpGuestRepository } from '../repositories/HttpGuestRepository';
 
 // Use Cases
 import {
+  // User Use Cases
   LoginUseCase,
   GetUserUseCase,
+  RegisterUseCase,
+  UpdateUserUseCase,
+  // Guest Use Cases
   CreateGuestUseCase,
   GetGuestUseCase,
+  EarnPointsUseCase,
+  RedeemPointsUseCase,
+  GetGuestStatisticsUseCase,
+  // Operation Use Cases
+  GetOperationHistoryUseCase,
 } from '../../application';
 
 // HTTP Client
@@ -30,11 +39,21 @@ class DIContainer {
   private _userRepository: HttpUserRepository | null = null;
   private _guestRepository: HttpGuestRepository | null = null;
 
-  // Use Cases
+  // ========== User Use Cases ==========
   private _loginUseCase: LoginUseCase | null = null;
   private _getUserUseCase: GetUserUseCase | null = null;
+  private _registerUseCase: RegisterUseCase | null = null;
+  private _updateUserUseCase: UpdateUserUseCase | null = null;
+
+  // ========== Guest Use Cases ==========
   private _createGuestUseCase: CreateGuestUseCase | null = null;
   private _getGuestUseCase: GetGuestUseCase | null = null;
+  private _earnPointsUseCase: EarnPointsUseCase | null = null;
+  private _redeemPointsUseCase: RedeemPointsUseCase | null = null;
+  private _getGuestStatisticsUseCase: GetGuestStatisticsUseCase | null = null;
+
+  // ========== Operation Use Cases ==========
+  private _getOperationHistoryUseCase: GetOperationHistoryUseCase | null = null;
 
   /**
    * Получить HTTP Client
@@ -67,7 +86,7 @@ class DIContainer {
   }
 
   // ============================================================================
-  // USE CASES
+  // USER USE CASES
   // ============================================================================
 
   /**
@@ -91,6 +110,30 @@ class DIContainer {
   }
 
   /**
+   * Получить RegisterUseCase
+   */
+  get registerUseCase(): RegisterUseCase {
+    if (!this._registerUseCase) {
+      this._registerUseCase = new RegisterUseCase(this.userRepository);
+    }
+    return this._registerUseCase;
+  }
+
+  /**
+   * Получить UpdateUserUseCase
+   */
+  get updateUserUseCase(): UpdateUserUseCase {
+    if (!this._updateUserUseCase) {
+      this._updateUserUseCase = new UpdateUserUseCase(this.userRepository);
+    }
+    return this._updateUserUseCase;
+  }
+
+  // ============================================================================
+  // GUEST USE CASES
+  // ============================================================================
+
+  /**
    * Получить CreateGuestUseCase
    */
   get createGuestUseCase(): CreateGuestUseCase {
@@ -109,9 +152,64 @@ class DIContainer {
     }
     return this._getGuestUseCase;
   }
+
+  /**
+   * Получить EarnPointsUseCase
+   */
+  get earnPointsUseCase(): EarnPointsUseCase {
+    if (!this._earnPointsUseCase) {
+      this._earnPointsUseCase = new EarnPointsUseCase(
+        this.guestRepository,
+        this.guestRepository as any // TODO: Add OperationRepository
+      );
+    }
+    return this._earnPointsUseCase;
+  }
+
+  /**
+   * Получить RedeemPointsUseCase
+   */
+  get redeemPointsUseCase(): RedeemPointsUseCase {
+    if (!this._redeemPointsUseCase) {
+      this._redeemPointsUseCase = new RedeemPointsUseCase(
+        this.guestRepository,
+        this.guestRepository as any // TODO: Add OperationRepository
+      );
+    }
+    return this._redeemPointsUseCase;
+  }
+
+  /**
+   * Получить GetGuestStatisticsUseCase
+   */
+  get getGuestStatisticsUseCase(): GetGuestStatisticsUseCase {
+    if (!this._getGuestStatisticsUseCase) {
+      this._getGuestStatisticsUseCase = new GetGuestStatisticsUseCase(
+        this.guestRepository,
+        this.guestRepository as any // TODO: Add OperationRepository
+      );
+    }
+    return this._getGuestStatisticsUseCase;
+  }
+
+  // ============================================================================
+  // OPERATION USE CASES
+  // ============================================================================
+
+  /**
+   * Получить GetOperationHistoryUseCase
+   */
+  get getOperationHistoryUseCase(): GetOperationHistoryUseCase {
+    if (!this._getOperationHistoryUseCase) {
+      this._getOperationHistoryUseCase = new GetOperationHistoryUseCase(
+        this.guestRepository as any // TODO: Add OperationRepository
+      );
+    }
+    return this._getOperationHistoryUseCase;
+  }
 }
 
 /**
- * глобальный singleton инстанциа container
+ * Глобальный singleton инстанциа container
  */
 export const container = new DIContainer();
