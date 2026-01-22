@@ -82,6 +82,7 @@ export class HttpUserRepository implements IUserRepository {
       email: dto.email,
       name: dto.name,
       role: dto.role,
+      restaurantId: dto.restaurantId,
       isActive: dto.isActive,
       createdAt: new Date(dto.createdAt),
       updatedAt: new Date(dto.updatedAt),
