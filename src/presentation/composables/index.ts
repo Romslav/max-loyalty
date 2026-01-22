@@ -2,4 +2,7 @@
  * Composables Index - Reusable composition logic
  */
 
-// Will be populated with composables
+export { useAuth } from './useAuth';
+export { useUser } from './useUser';
+export { useGuest } from './useGuest';
+export { useFetch } from './useFetch';
