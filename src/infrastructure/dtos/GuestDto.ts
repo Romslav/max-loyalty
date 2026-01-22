@@ -13,6 +13,7 @@ export interface GuestDto {
   totalPoints: number;
   joinedAt: string;
   lastVisitAt?: string;
+  lastOperationAt?: string;
   isActive: boolean;
   restaurantIds: string[];
   createdAt: string;
@@ -26,6 +27,7 @@ export interface GuestStatisticsDto {
   pointsRedeemed: number;
   pointsAvailable: number;
   lastVisitDate?: string;
+  favoriteRestaurant?: string;
 }
 
 export interface GuestWithStatisticsDto extends GuestDto {
@@ -67,6 +69,7 @@ export function mapGuestToDto(guest: Guest): GuestDto {
     totalPoints: guest.totalPoints,
     joinedAt: guest.joinedAt.toISOString(),
     lastVisitAt: guest.lastVisitAt?.toISOString(),
+    lastOperationAt: guest.lastOperationAt?.toISOString(),
     isActive: guest.isActive,
     restaurantIds: guest.restaurantIds,
     createdAt: guest.createdAt.toISOString(),
@@ -82,5 +85,6 @@ export function mapGuestStatisticsToDto(stats: GuestStatistics): GuestStatistics
     pointsRedeemed: stats.pointsRedeemed,
     pointsAvailable: stats.pointsAvailable,
     lastVisitDate: stats.lastVisitDate?.toISOString(),
+    favoriteRestaurant: stats.favoriteRestaurant,
   };
 }
