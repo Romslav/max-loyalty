@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="login-form">
+  <form @submit.prevent="form.handleSubmit" class="login-form">
     <h2 class="login-form__title">Sign In</h2>
 
     <!-- Email Field -->
