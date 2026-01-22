@@ -11,13 +11,21 @@ const API_ENDPOINT = '/users';
 
 export class HttpUserRepository implements IUserRepository {
   async findById(id: string): Promise<User | null> {
-    const dto = await httpClient.get<UserDto>(`${API_ENDPOINT}/${id}`);
-    return dto ? this.dtoToEntity(dto) : null;
+    try {
+      const dto = await httpClient.get<UserDto>(`${API_ENDPOINT}/${id}`);
+      return dto ? this.dtoToEntity(dto) : null;
+    } catch (error) {
+      return null;
+    }
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    const dto = await httpClient.get<UserDto>(`${API_ENDPOINT}/email/${email}`);
-    return dto ? this.dtoToEntity(dto) : null;
+    try {
+      const dto = await httpClient.get<UserDto>(`${API_ENDPOINT}/email/${email}`);
+      return dto ? this.dtoToEntity(dto) : null;
+    } catch (error) {
+      return null;
+    }
   }
 
   async findAll(filters?: UserFilters): Promise<User[]> {
@@ -58,10 +66,14 @@ export class HttpUserRepository implements IUserRepository {
   }
 
   async existsByEmail(email: string): Promise<boolean> {
-    const response = await httpClient.get<{ exists: boolean }>(
-      `${API_ENDPOINT}/exists/email/${email}`
-    );
-    return response.exists;
+    try {
+      const response = await httpClient.get<{ exists: boolean }>(
+        `${API_ENDPOINT}/exists/email/${email}`
+      );
+      return response.exists;
+    } catch (error) {
+      return false;
+    }
   }
 
   private dtoToEntity(dto: UserDto): User {
