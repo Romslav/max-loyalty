@@ -4,18 +4,23 @@
     :disabled="disabled || loading"
     @click="$emit('click')"
   >
-    <span v-if="loading" class="btn__loader">↻</span>
+    <span v-if="loading" class="btn__loader">\u21bb</span>
     <slot v-else />
   </button>
 </template>
 
 <script setup lang="ts">
-import type { PropType } from 'vue';
-
+/**
+ * AppButton Props
+ */
 export interface AppButtonProps {
+  /** Button variant style */
   variant?: 'primary' | 'secondary' | 'danger';
+  /** Button size */
   size?: 'sm' | 'md' | 'lg';
+  /** Disable button */
   disabled?: boolean;
+  /** Show loading state */
   loading?: boolean;
 }
 
