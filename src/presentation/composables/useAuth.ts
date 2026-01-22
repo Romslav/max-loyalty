@@ -8,51 +8,83 @@ import type { LoginCredentials, RegisterCredentials } from '@/presentation/store
 
 export function useAuth() {
   const authStore = useAuthStore();
+  const localError = ref<string | null>(null);
 
   const isAuthenticated = computed(() => authStore.isAuthenticated);
   const user = computed(() => authStore.user);
   const isLoading = computed(() => authStore.isLoading);
-  const error = computed(() => authStore.error);
+  const error = computed(() => authStore.error || localError.value);
   const isAdmin = computed(() => authStore.isAdmin);
   const isRestaurant = computed(() => authStore.isRestaurant);
 
-  async function login(credentials: LoginCredentials) {
+  /**
+   * Попытаться войти
+   */
+  async function login(credentials: LoginCredentials): Promise<boolean> {
+    localError.value = null;
     try {
       await authStore.login(credentials);
       return true;
     } catch (err) {
+      if (err instanceof Error) {
+        localError.value = err.message;
+      } else {
+        localError.value = 'Login failed';
+      }
       return false;
     }
   }
 
-  async function register(credentials: RegisterCredentials) {
+  /**
+   * Регистрироваться
+   */
+  async function register(credentials: RegisterCredentials): Promise<boolean> {
+    localError.value = null;
     try {
       await authStore.register(credentials);
       return true;
     } catch (err) {
+      if (err instanceof Error) {
+        localError.value = err.message;
+      } else {
+        localError.value = 'Registration failed';
+      }
       return false;
     }
   }
 
-  async function logout() {
+  /**
+   * Выйти
+   */
+  async function logout(): Promise<void> {
+    localError.value = null;
     await authStore.logout();
   }
 
-  function clearError() {
+  /**
+   * Очистить ошибки
+   */
+  function clearError(): void {
+    localError.value = null;
     authStore.clearError();
   }
 
-  function hasPermission(role: string) {
+  /**
+   * Проверить права доступа
+   */
+  function hasPermission(role: string): boolean {
     return authStore.hasPermission(role);
   }
 
   return {
+    // State
     isAuthenticated,
     user,
     isLoading,
     error,
     isAdmin,
     isRestaurant,
+    // Methods
     login,
     register,
     logout,
