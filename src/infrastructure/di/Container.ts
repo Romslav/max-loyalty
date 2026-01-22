@@ -1,99 +1,117 @@
 /**
- * Dependency Injection Container - зарегистрированные сервисы и репозитория
- * использует pattern "Singleton" для единого экземпляра
+ * DI Container - Dependency Injection Container
+ * 
+ * Определяет все зависимости для депенденси инжекшн
  */
 
-import type { IUserRepository, IGuestRepository, IRestaurantRepository, IOperationRepository, IBillingRepository } from '../../domain/repositories';
+// Repositories
 import { HttpUserRepository } from '../repositories/HttpUserRepository';
 import { HttpGuestRepository } from '../repositories/HttpGuestRepository';
 
-interface DIContainer {
-  userRepository: IUserRepository;
-  guestRepository: IGuestRepository;
-  restaurantRepository: IRestaurantRepository;
-  operationRepository: IOperationRepository;
-  billingRepository: IBillingRepository;
-}
+// Use Cases
+import {
+  LoginUseCase,
+  GetUserUseCase,
+  CreateGuestUseCase,
+  GetGuestUseCase,
+} from '../../application';
+
+// HTTP Client
+import { HttpClient } from '../http/HttpClient';
 
 /**
- * Контейнер для управления депенденсиями
+ * DI Container - Singleton instances
  */
-class Container implements DIContainer {
-  private static instance: Container;
-  private _userRepository: IUserRepository | null = null;
-  private _guestRepository: IGuestRepository | null = null;
-  private _restaurantRepository: IRestaurantRepository | null = null;
-  private _operationRepository: IOperationRepository | null = null;
-  private _billingRepository: IBillingRepository | null = null;
+class DIContainer {
+  // HTTP Client
+  private _httpClient: HttpClient | null = null;
 
-  private constructor() {}
+  // Repositories
+  private _userRepository: HttpUserRepository | null = null;
+  private _guestRepository: HttpGuestRepository | null = null;
+
+  // Use Cases
+  private _loginUseCase: LoginUseCase | null = null;
+  private _getUserUseCase: GetUserUseCase | null = null;
+  private _createGuestUseCase: CreateGuestUseCase | null = null;
+  private _getGuestUseCase: GetGuestUseCase | null = null;
 
   /**
-   * Получить синглтон экземпляр контейнера
+   * Получить HTTP Client
    */
-  static getInstance(): Container {
-    if (!Container.instance) {
-      Container.instance = new Container();
+  get httpClient(): HttpClient {
+    if (!this._httpClient) {
+      this._httpClient = new HttpClient();
     }
-    return Container.instance;
+    return this._httpClient;
   }
 
   /**
-   * User Repository getter
+   * Получить User Repository
    */
-  get userRepository(): IUserRepository {
+  get userRepository(): HttpUserRepository {
     if (!this._userRepository) {
-      this._userRepository = new HttpUserRepository();
+      this._userRepository = new HttpUserRepository(this.httpClient);
     }
     return this._userRepository;
   }
 
   /**
-   * Guest Repository getter
+   * Получить Guest Repository
    */
-  get guestRepository(): IGuestRepository {
+  get guestRepository(): HttpGuestRepository {
     if (!this._guestRepository) {
-      this._guestRepository = new HttpGuestRepository();
+      this._guestRepository = new HttpGuestRepository(this.httpClient);
     }
     return this._guestRepository;
   }
 
+  // ============================================================================
+  // USE CASES
+  // ============================================================================
+
   /**
-   * Restaurant Repository getter
+   * Получить LoginUseCase
    */
-  get restaurantRepository(): IRestaurantRepository {
-    if (!this._restaurantRepository) {
-      // TODO: реализовать HttpRestaurantRepository
-      throw new Error('RestaurantRepository not implemented');
+  get loginUseCase(): LoginUseCase {
+    if (!this._loginUseCase) {
+      this._loginUseCase = new LoginUseCase(this.userRepository);
     }
-    return this._restaurantRepository;
+    return this._loginUseCase;
   }
 
   /**
-   * Operation Repository getter
+   * Получить GetUserUseCase
    */
-  get operationRepository(): IOperationRepository {
-    if (!this._operationRepository) {
-      // TODO: реализовать HttpOperationRepository
-      throw new Error('OperationRepository not implemented');
+  get getUserUseCase(): GetUserUseCase {
+    if (!this._getUserUseCase) {
+      this._getUserUseCase = new GetUserUseCase(this.userRepository);
     }
-    return this._operationRepository;
+    return this._getUserUseCase;
   }
 
   /**
-   * Billing Repository getter
+   * Получить CreateGuestUseCase
    */
-  get billingRepository(): IBillingRepository {
-    if (!this._billingRepository) {
-      // TODO: реализовать HttpBillingRepository
-      throw new Error('BillingRepository not implemented');
+  get createGuestUseCase(): CreateGuestUseCase {
+    if (!this._createGuestUseCase) {
+      this._createGuestUseCase = new CreateGuestUseCase(this.guestRepository);
     }
-    return this._billingRepository;
+    return this._createGuestUseCase;
+  }
+
+  /**
+   * Получить GetGuestUseCase
+   */
+  get getGuestUseCase(): GetGuestUseCase {
+    if (!this._getGuestUseCase) {
+      this._getGuestUseCase = new GetGuestUseCase(this.guestRepository);
+    }
+    return this._getGuestUseCase;
   }
 }
 
-// Настройка и экспорт контейнера
-export const container = Container.getInstance();
-
-// экспорт типа для TypeScript
-export type { DIContainer };
+/**
+ * глобальный singleton инстанциа container
+ */
+export const container = new DIContainer();
