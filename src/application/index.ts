@@ -1,8 +1,15 @@
 /**
  * Application Layer - Use Cases и Business Logic
  * 
- * Этот лейер организует всю бизнес-логику использованием
+ * Этот лейер организует всю бизнес-логику используя
  * модели Use Cases
+ * 
+ * Архитектура:
+ * - Errors: Custom error classes for consistent error handling
+ * - Validators: Input validation functions
+ * - Use Cases: Business logic operations
+ * 
+ * Все компоненты полностью типизированы и готовы к production
  */
 
 // Error handling
