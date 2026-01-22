@@ -25,7 +25,10 @@ export const useGuestStore = defineStore('guest', () => {
   const totalLoyaltyPoints = computed(() => currentGuest.value?.loyaltyBalance ?? 0);
 
   // Actions
-  async function createGuest(data: CreateGuestRequest) {
+  /**
+   * Создать нового гостя
+   */
+  async function createGuest(data: CreateGuestRequest): Promise<Guest> {
     isLoading.value = true;
     error.value = null;
 
@@ -48,13 +51,17 @@ export const useGuestStore = defineStore('guest', () => {
     }
   }
 
-  async function fetchGuest(guestId: string) {
+  /**
+   * Получить гостя по ID
+   */
+  async function fetchGuest(guestId: string): Promise<Guest> {
     isLoading.value = true;
     error.value = null;
 
     try {
       const guest = await container.getGuestUseCase.execute(guestId);
       currentGuest.value = guest;
+      return guest;
     } catch (err) {
       if (isAppError(err)) {
         error.value = err.message;
@@ -67,7 +74,10 @@ export const useGuestStore = defineStore('guest', () => {
     }
   }
 
-  async function fetchStatistics(guestId: string) {
+  /**
+   * Получить статистику гостя
+   */
+  async function fetchStatistics(guestId: string): Promise<GuestStatistics> {
     isLoading.value = true;
     error.value = null;
 
@@ -88,6 +98,9 @@ export const useGuestStore = defineStore('guest', () => {
     }
   }
 
+  /**
+   * Заработать баллы
+   */
   async function earnPoints(guestId: string, points: number, reason?: string) {
     isLoading.value = true;
     error.value = null;
@@ -114,6 +127,9 @@ export const useGuestStore = defineStore('guest', () => {
     }
   }
 
+  /**
+   * Потратить баллы
+   */
   async function redeemPoints(guestId: string, points: number, rewardType: string) {
     isLoading.value = true;
     error.value = null;
@@ -140,15 +156,24 @@ export const useGuestStore = defineStore('guest', () => {
     }
   }
 
-  function selectGuest(guest: Guest) {
+  /**
+   * Выбрать гостя
+   */
+  function selectGuest(guest: Guest): void {
     selectedGuest.value = guest;
   }
 
-  function clearSelection() {
+  /**
+   * Очистить выбор
+   */
+  function clearSelection(): void {
     selectedGuest.value = null;
   }
 
-  function clearError() {
+  /**
+   * Очистить ошибки
+   */
+  function clearError(): void {
     error.value = null;
   }
 
