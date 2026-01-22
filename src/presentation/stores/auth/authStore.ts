@@ -9,6 +9,32 @@ import { isAppError } from '@/application';
 import type { User } from '@/domain/entities';
 import type { LoginCredentials, RegisterCredentials } from './types';
 
+/**
+ * Безопасное сохранение в localStorage (SSR-compatible)
+ */
+function setAuthToken(key: string, value: string): void {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(key, value);
+    } catch (err) {
+      console.warn(`Failed to save ${key} to localStorage:`, err);
+    }
+  }
+}
+
+/**
+ * Безопасное удаление из localStorage (SSR-compatible)
+ */
+function removeAuthToken(key: string): void {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(key);
+    } catch (err) {
+      console.warn(`Failed to remove ${key} from localStorage:`, err);
+    }
+  }
+}
+
 export const useAuthStore = defineStore('auth', () => {
   // State
   const user = ref<User | null>(null);
@@ -35,9 +61,11 @@ export const useAuthStore = defineStore('auth', () => {
       accessToken.value = result.accessToken;
       refreshToken.value = result.refreshToken;
 
-      // Save to localStorage
-      localStorage.setItem('auth_token', result.accessToken);
-      localStorage.setItem('auth_refresh_token', result.refreshToken);
+      // Save to localStorage (SSR-safe)
+      setAuthToken('auth_token', result.accessToken);
+      if (result.refreshToken) {
+        setAuthToken('auth_refresh_token', result.refreshToken);
+      }
     } catch (err) {
       if (isAppError(err)) {
         error.value = err.message;
@@ -59,6 +87,17 @@ export const useAuthStore = defineStore('auth', () => {
 
       user.value = result.user;
 
+      // Save tokens if provided (SSR-safe)
+      if (result.accessToken) {
+        accessToken.value = result.accessToken;
+        setAuthToken('auth_token', result.accessToken);
+      }
+
+      if (result.refreshToken) {
+        refreshToken.value = result.refreshToken;
+        setAuthToken('auth_refresh_token', result.refreshToken);
+      }
+
       return result;
     } catch (err) {
       if (isAppError(err)) {
@@ -78,12 +117,15 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken.value = null;
     error.value = null;
 
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_refresh_token');
+    // Remove from localStorage (SSR-safe)
+    removeAuthToken('auth_token');
+    removeAuthToken('auth_refresh_token');
   }
 
+  /**
+   * Восстановить состояние из localStorage (SSR-safe)
+   */
   function hydrate(token: string) {
-    // Восстановить состояние из localStorage
     accessToken.value = token;
   }
 
