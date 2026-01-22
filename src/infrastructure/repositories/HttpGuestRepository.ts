@@ -92,6 +92,7 @@ export class HttpGuestRepository implements IGuestRepository {
       totalPoints: dto.totalPoints,
       joinedAt: new Date(dto.joinedAt),
       lastVisitAt: dto.lastVisitAt ? new Date(dto.lastVisitAt) : undefined,
+      lastOperationAt: dto.lastOperationAt ? new Date(dto.lastOperationAt) : undefined,
       isActive: dto.isActive,
       restaurantIds: dto.restaurantIds,
       createdAt: new Date(dto.createdAt),
@@ -107,6 +108,7 @@ export class HttpGuestRepository implements IGuestRepository {
       pointsRedeemed: dto.pointsRedeemed,
       pointsAvailable: dto.pointsAvailable,
       lastVisitDate: dto.lastVisitDate ? new Date(dto.lastVisitDate) : undefined,
+      favoriteRestaurant: dto.favoriteRestaurant,
     };
   }
 }
