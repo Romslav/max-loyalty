@@ -115,11 +115,94 @@ export const phoneNumber = (): ValidatorFn => {
 };
 
 /**
+ * URL validator
+ */
+export const url = (): ValidatorFn => {
+  return (value: string) => {
+    if (!value) return null;
+    try {
+      new URL(value);
+      return null;
+    } catch {
+      return 'Please enter a valid URL';
+    }
+  };
+};
+
+/**
+ * Min value validator (for numbers)
+ */
+export const minValue = (min: number): ValidatorFn => {
+  return (value: number) => {
+    if (value === null || value === undefined) return null;
+    if (value < min) {
+      return `Value must be at least ${min}`;
+    }
+    return null;
+  };
+};
+
+/**
+ * Max value validator (for numbers)
+ */
+export const maxValue = (max: number): ValidatorFn => {
+  return (value: number) => {
+    if (value === null || value === undefined) return null;
+    if (value > max) {
+      return `Value must not exceed ${max}`;
+    }
+    return null;
+  };
+};
+
+/**
+ * Date validator
+ */
+export const dateValidator = (): ValidatorFn => {
+  return (value: string) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (isNaN(date.getTime())) {
+      return 'Please enter a valid date';
+    }
+    return null;
+  };
+};
+
+/**
+ * Min date validator
+ */
+export const minDate = (minDate: Date): ValidatorFn => {
+  return (value: string) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (date < minDate) {
+      return `Date must be after ${minDate.toLocaleDateString()}`;
+    }
+    return null;
+  };
+};
+
+/**
+ * Max date validator
+ */
+export const maxDate = (maxDate: Date): ValidatorFn => {
+  return (value: string) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (date > maxDate) {
+      return `Date must be before ${maxDate.toLocaleDateString()}`;
+    }
+    return null;
+  };
+};
+
+/**
  * Custom validator creator
  */
 export const custom = (validatorFn: (value: any) => boolean, message: string): ValidatorFn => {
   return (value: any) => {
-    if (!value) return null;
+    if (!value && value !== 0) return null;
     if (!validatorFn(value)) {
       return message;
     }
