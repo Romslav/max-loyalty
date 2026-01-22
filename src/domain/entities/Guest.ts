@@ -1,89 +1,98 @@
 /**
  * Guest Entity - информация о клиентах программы лояльности
+ * 
+ * Представляет клиента, участвующего в программе лояльности
+ * Может быть зарегистрирован в нескольких ресторанах
  */
 
+/**
+ * Основная сущность Guest
+ * Хранит информацию о клиенте программы лояльности
+ */
 export interface Guest {
-  id: string;
-  email: string;
-  phoneNumber: string;
-  firstName: string;
-  lastName: string;
-  totalPoints: number;
-  joinedAt: Date;
-  lastVisitAt?: Date;
-  lastOperationAt?: Date;
-  isActive: boolean;
-  restaurantIds: string[]; // Рестораны где гость зарегистрирован
-  createdAt: Date;
-  updatedAt: Date;
+  id: string;              // UUID клиента
+  email: string;           // Email клиента
+  phoneNumber: string;     // Номер телефона
+  firstName: string;       // Имя
+  lastName: string;        // Фамилия
+  totalPoints: number;     // Общее количество баллов
+  joinedAt: Date;          // Дата присоединения к программе
+  lastVisitAt?: Date;      // Дата последнего визита
+  lastOperationAt?: Date;  // Дата последней операции с баллами
+  isActive: boolean;       // Активен ли гость
+  restaurantIds: string[]; // Рестораны, где гость зарегистрирован
+  createdAt: Date;         // Дата создания записи
+  updatedAt: Date;         // Дата последнего обновления
 }
 
 /**
  * Статистика гостя
+ * Кэшированные данные для быстрого доступа
  */
 export interface GuestStatistics {
-  totalVisits: number;
-  totalSpent: number;
-  averageSpend: number;
-  pointsRedeemed: number;
-  pointsAvailable: number;
-  lastVisitDate?: Date;
-  favoriteRestaurant?: string;
+  totalVisits: number;       // Всего визитов
+  totalSpent: number;        // Всего потрачено денег
+  averageSpend: number;      // Средний чек
+  pointsRedeemed: number;    // Использовано баллов
+  pointsAvailable: number;   // Доступно баллов
+  lastVisitDate?: Date;      // Дата последнего визита
+  favoriteRestaurant?: string; // Любимый ресторан
 }
 
 /**
  * История операций гостя
+ * Логирует каждую операцию с баллами
  */
 export interface GuestOperationHistory {
-  guestId: string;
-  operationId: string;
-  restaurantId: string;
-  operationType: 'earn' | 'redeem' | 'expire';
-  pointsAmount: number;
-  description: string;
-  createdAt: Date;
+  guestId: string;         // ID гостя
+  operationId: string;     // ID операции
+  restaurantId: string;    // ID ресторана
+  operationType: 'earn' | 'redeem' | 'expire'; // Тип операции
+  pointsAmount: number;    // Количество баллов
+  description: string;     // Описание операции
+  createdAt: Date;         // Дата операции
 }
 
 /**
  * Данные для создания нового гостя
  */
 export interface CreateGuestInput {
-  email: string;
-  phoneNumber: string;
-  firstName: string;
-  lastName: string;
-  restaurantId: string; // Ресторан где регистрируется
-  initialPoints?: number; // Начальные бонусные баллы
+  email: string;           // Email гостя
+  phoneNumber: string;     // Номер телефона
+  firstName: string;       // Имя
+  lastName: string;        // Фамилия
+  restaurantId: string;    // Ресторан, в котором регистрируется гость
+  initialPoints?: number;  // Начальные бонусные баллы (опционально)
 }
 
 /**
  * Данные для обновления гостя
  */
 export interface UpdateGuestInput {
-  email?: string;
-  phoneNumber?: string;
-  firstName?: string;
-  lastName?: string;
-  isActive?: boolean;
+  email?: string;          // Новый email
+  phoneNumber?: string;    // Новый номер телефона
+  firstName?: string;      // Новое имя
+  lastName?: string;       // Новая фамилия
+  isActive?: boolean;      // Статус активности
 }
 
 /**
  * Фильтры для поиска гостей
  */
 export interface GuestFilters {
-  restaurantId?: string;
-  isActive?: boolean;
-  search?: string; // поиск по email, имени или номеру телефона
-  minPoints?: number;
-  maxPoints?: number;
-  joinedSince?: Date;
-  page?: number;
-  limit?: number;
+  restaurantId?: string;   // Фильтр по ресторану
+  isActive?: boolean;      // Фильтр по активности
+  search?: string;         // Поиск по email, имени или номеру телефона
+  minPoints?: number;      // Минимум баллов
+  maxPoints?: number;      // Максимум баллов
+  joinedSince?: Date;      // Присоединился после даты
+  page?: number;           // Номер страницы
+  limit?: number;          // Количество элементов на странице
 }
 
 /**
- * Расширенная информация о госте с статистикой
+ * Расширенная информация о госте со статистикой
  */
 export interface GuestWithStatistics extends Guest {
-  statistics: GuestStatistics;
+  statistics: GuestStatistics; // Кэшированная статистика
 }
