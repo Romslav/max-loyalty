@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="register-form">
+  <form @submit.prevent="form.handleSubmit" class="register-form">
     <h2 class="register-form__title">Create Account</h2>
 
     <!-- Name Field -->
