@@ -1,0 +1,5 @@
+/**
+ * User Pages - Index
+ */
+
+export { default as UserProfile } from './UserProfile.vue';
