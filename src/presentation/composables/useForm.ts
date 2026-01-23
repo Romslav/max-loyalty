@@ -1,200 +1,235 @@
 /**
- * useForm composable - управление формой с валидацией
+ * useForm Composable - Оставление формы с валидацией
  */
 
-import { ref, computed } from 'vue';
-import type { ComputedRef, Ref } from 'vue';
+import { ref, reactive, computed } from 'vue';
+import { FieldValidator, FieldError } from '@/shared/validators/field-validator';
+import { ValidationRule } from '@/shared/validators/rules';
 
-/**
- * Validator function
- */
-export type ValidatorFn = (value: any) => string | null;
-
-/**
- * Form field config
- */
-export interface FormFieldConfig {
-  validators?: ValidatorFn[];
-  defaultValue?: any;
+interface FormOptions<T> {
+  initialValues: T;
+  validationSchema?: Record<keyof T, ValidationRule[]>;
+  onSubmit?: (values: T) => Promise<void> | void;
 }
 
-/**
- * Form config
- */
-export interface FormConfig {
-  [fieldName: string]: FormFieldConfig;
-}
+export const useForm = <T extends Record<string, any>>(options: FormOptions<T>) => {
+  const { initialValues, validationSchema = {}, onSubmit } = options;
 
-/**
- * Form errors
- */
-export interface FormErrors {
-  [fieldName: string]: string | null;
-}
-
-/**
- * useForm composable
- */
-export function useForm<T extends Record<string, any>>(
-  config: FormConfig,
-  onSubmit: (data: T) => Promise<void> | void
-) {
   // State
-  const formData = ref<T>(getDefaultFormData() as T);
-  const errors = ref<FormErrors>({});
-  const touched = ref<Record<string, boolean>>({});
+  const values = reactive<T>(structuredClone(initialValues));
+  const errors = ref<FieldError[]>([]);
+  const touched = reactive<Record<keyof T, boolean>>({});
+  const isDirty = ref(false);
   const isSubmitting = ref(false);
-  const submitError = ref<string | null>(null);
+  const submitCount = ref(0);
+
+  // Computed
+  const isValid = computed(() => {
+    const result = FieldValidator.validateFields(values, validationSchema as any);
+    return result.valid;
+  });
+
+  const hasErrors = computed(() => errors.value.length > 0);
+
+  const isFormTouched = computed(() => {
+    return Object.values(touched).some(val => val === true);
+  });
 
   /**
-   * Get default form data from config
+   * Отметить поле как тронутое
    */
-  function getDefaultFormData(): Partial<T> {
-    const data: Partial<T> = {};
-    for (const [fieldName, fieldConfig] of Object.entries(config)) {
-      data[fieldName as keyof T] = fieldConfig.defaultValue ?? '';
+  const setTouched = (field: keyof T, value: boolean = true) => {
+    touched[field] = value;
+  };
+
+  /**
+   * Маркировать все поля как тронутые
+   */
+  const setAllTouched = () => {
+    Object.keys(values).forEach(field => {
+      touched[field as keyof T] = true;
+    });
+  };
+
+  /**
+   * Остановить значение поля
+   */
+  const setFieldValue = (field: keyof T, value: any) => {
+    values[field] = value;
+    isDirty.value = true;
+  };
+
+  /**
+   * Остановить значения нескольких полей
+   */
+  const setValues = (newValues: Partial<T>) => {
+    Object.assign(values, newValues);
+    isDirty.value = true;
+  };
+
+  /**
+   * Остановить ошибки
+   */
+  const setErrors = (newErrors: FieldError[]) => {
+    errors.value = newErrors;
+  };
+
+  /**
+   * Остановить ошибку поля
+   */
+  const setFieldError = (field: keyof T, message: string) => {
+    const existingIndex = errors.value.findIndex(e => e.field === field);
+    if (existingIndex >= 0) {
+      errors.value[existingIndex].message = message;
+    } else {
+      errors.value.push({ field: field as string, message });
     }
-    return data;
-  }
+  };
 
   /**
-   * Get validators for field
+   * Очистить ошибки поля
    */
-  function getFieldValidators(fieldName: string): ValidatorFn[] {
-    return config[fieldName]?.validators ?? [];
-  }
+  const clearFieldErrors = (field: keyof T) => {
+    errors.value = errors.value.filter(e => e.field !== field);
+  };
 
   /**
-   * Validate single field
+   * Очистить все ошибки
    */
-  function validateField(fieldName: string): string | null {
-    const value = formData.value[fieldName as keyof T];
-    const validators = getFieldValidators(fieldName);
+  const clearErrors = () => {
+    errors.value = [];
+  };
 
-    for (const validator of validators) {
-      const error = validator(value);
-      if (error) {
-        errors.value[fieldName] = error;
-        return error;
-      }
+  /**
+   * Очистить форму
+   */
+  const reset = () => {
+    Object.assign(values, structuredClone(initialValues));
+    errors.value = [];
+    Object.keys(touched).forEach(key => {
+      touched[key as keyof T] = false;
+    });
+    isDirty.value = false;
+    submitCount.value = 0;
+  };
+
+  /**
+   * Валидировать одно поле
+   */
+  const validateField = (field: keyof T) => {
+    const rules = validationSchema[field] || [];
+    const value = values[field];
+    const result = FieldValidator.validate(value, rules);
+
+    if (!result.valid) {
+      result.errors.forEach(err => {
+        setFieldError(field, err.message);
+      });
+    } else {
+      clearFieldErrors(field);
     }
 
-    errors.value[fieldName] = null;
-    return null;
-  }
+    return result.valid;
+  };
 
   /**
-   * Validate all fields
+   * Валидировать всю форму
    */
-  function validateForm(): boolean {
-    let isValid = true;
-
-    for (const fieldName of Object.keys(config)) {
-      const error = validateField(fieldName);
-      if (error) {
-        isValid = false;
-      }
-    }
-
-    return isValid;
-  }
+  const validate = () => {
+    const result = FieldValidator.validateFields(values, validationSchema as any);
+    setErrors(result.errors);
+    return result.valid;
+  };
 
   /**
-   * Mark field as touched
+   * Отправить форму
    */
-  function touchField(fieldName: string): void {
-    touched.value[fieldName] = true;
-  }
+  const handleSubmit = async () => {
+    submitCount.value++;
+    setAllTouched();
 
-  /**
-   * Reset form
-   */
-  function reset(): void {
-    formData.value = getDefaultFormData() as T;
-    errors.value = {};
-    touched.value = {};
-    submitError.value = null;
-  }
-
-  /**
-   * Handle form submission
-   */
-  async function handleSubmit(): Promise<void> {
-    // Mark all fields as touched
-    for (const fieldName of Object.keys(config)) {
-      touched.value[fieldName] = true;
-    }
-
-    // Validate form
-    if (!validateForm()) {
+    if (!validate()) {
       return;
     }
 
-    // Submit
     isSubmitting.value = true;
-    submitError.value = null;
-
     try {
-      await onSubmit(formData.value);
-    } catch (err) {
-      if (err instanceof Error) {
-        submitError.value = err.message;
-      } else {
-        submitError.value = 'An unexpected error occurred';
-      }
+      await onSubmit?.(values);
+    } catch (error) {
+      console.error('Form submission error:', error);
+      throw error;
     } finally {
       isSubmitting.value = false;
     }
-  }
+  };
 
   /**
-   * Update field value
+   * Обработчик onBlur
    */
-  function setFieldValue(fieldName: string, value: any): void {
-    formData.value[fieldName as keyof T] = value;
-  }
+  const handleBlur = (field: keyof T) => {
+    setTouched(field, true);
+    validateField(field);
+  };
 
   /**
-   * Get field error
+   * Обработчик onChange
    */
-  function getFieldError(fieldName: string): string | null {
-    if (!touched.value[fieldName]) {
-      return null;
+  const handleChange = (field: keyof T, value: any) => {
+    setFieldValue(field, value);
+    if (touched[field]) {
+      validateField(field);
     }
-    return errors.value[fieldName] ?? null;
-  }
+  };
 
   /**
-   * Check if form is valid
+   * Получить ошибки поля
    */
-  const isValid = computed((): boolean => {
-    return Object.values(errors.value).every((error) => error === null);
-  });
+  const getFieldErrors = (field: keyof T): string[] => {
+    return FieldValidator.getFieldErrors(errors.value, field as string);
+  };
 
   /**
-   * Check if form is dirty
+   * Получить статус поля
    */
-  const isDirty = computed((): boolean => {
-    return Object.values(touched.value).some((t) => t === true);
-  });
+  const getFieldStatus = (field: keyof T) => {
+    const hasError = FieldValidator.hasFieldError(errors.value, field as string);
+    const isTouched = touched[field];
+
+    return {
+      error: hasError && isTouched,
+      success: !hasError && isTouched && values[field] !== '',
+      pristine: !isTouched,
+    };
+  };
 
   return {
     // State
-    formData,
+    values,
     errors,
     touched,
-    isSubmitting,
-    submitError,
-    // Getters
-    isValid,
     isDirty,
+    isSubmitting,
+    submitCount,
+    // Computed
+    isValid,
+    hasErrors,
+    isFormTouched,
     // Methods
-    validateField,
-    validateForm,
-    touchField,
-    reset,
-    handleSubmit,
+    setTouched,
+    setAllTouched,
     setFieldValue,
-    getFieldError,
+    setValues,
+    setErrors,
+    setFieldError,
+    clearFieldErrors,
+    clearErrors,
+    reset,
+    validateField,
+    validate,
+    handleSubmit,
+    handleBlur,
+    handleChange,
+    getFieldErrors,
+    getFieldStatus,
   };
-}
+};
