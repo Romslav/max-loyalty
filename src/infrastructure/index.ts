@@ -6,7 +6,8 @@ export type { HttpClientConfig } from './http';
 export * from './dtos';
 
 // Repositories
-export { HttpUserRepository, HttpGuestRepository } from './repositories';
+export { HttpUserRepository, HttpGuestRepository, HttpPointsRepository } from './repositories';
+export type { PointsOperationDTO, PointsBalanceDTO, PointsHistoryResponse } from './repositories/http/HttpPointsRepository';
 
 // Dependency Injection
 export { container } from './di';
