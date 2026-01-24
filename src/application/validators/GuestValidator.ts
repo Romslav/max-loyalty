@@ -1,109 +1,150 @@
 /**
- * GuestValidator - валидация данных гостя
+ * GuestValidator
+ * 
+ * Validates input for guest creation and updates.
+ * Comprehensive validation rules for email, phone, name.
  */
 
-import type { CreateGuestInput, UpdateGuestInput } from '../../domain/entities';
-import { ValidationError } from '../errors';
-import { validateEmail, normalizeEmail } from './EmailValidator';
-import { validatePhoneNumber, normalizePhoneNumber } from './PhoneValidator';
-
-/**
- * Валидировать данные для создания гостя
- */
-export function validateCreateGuestInput(input: CreateGuestInput): void {
-  const errors: Array<{ field: string; message: string }> = [];
-
-  // Проверить email
-  try {
-    validateEmail(input.email);
-  } catch (error: any) {
-    errors.push({ field: 'email', message: error.message });
-  }
-
-  // Проверить номер телефона
-  try {
-    validatePhoneNumber(input.phoneNumber);
-  } catch (error: any) {
-    errors.push({ field: 'phoneNumber', message: error.message });
-  }
-
-  // Проверить firstName
-  if (!input.firstName || input.firstName.trim().length === 0) {
-    errors.push({ field: 'firstName', message: 'First name is required' });
-  } else if (input.firstName.length < 2 || input.firstName.length > 50) {
-    errors.push({ field: 'firstName', message: 'First name must be between 2 and 50 characters' });
-  }
-
-  // Проверить lastName
-  if (!input.lastName || input.lastName.trim().length === 0) {
-    errors.push({ field: 'lastName', message: 'Last name is required' });
-  } else if (input.lastName.length < 2 || input.lastName.length > 50) {
-    errors.push({ field: 'lastName', message: 'Last name must be between 2 and 50 characters' });
-  }
-
-  // Проверить restaurantId
-  if (!input.restaurantId) {
-    errors.push({ field: 'restaurantId', message: 'Restaurant ID is required' });
-  }
-
-  // Проверить initialPoints если нужно
-  if (input.initialPoints !== undefined && input.initialPoints < 0) {
-    errors.push({ field: 'initialPoints', message: 'Initial points cannot be negative' });
-  }
-
-  if (errors.length > 0) {
-    throw ValidationError.multipleErrors(errors);
-  }
+export interface CreateGuestInput {
+  email: string
+  phone: string
+  firstName: string
+  lastName: string
+  referredBy?: string
 }
 
-/**
- * Нормализировать данные для создания
- */
-export function normalizeCreateGuestInput(input: CreateGuestInput): CreateGuestInput {
-  return {
-    ...input,
-    email: normalizeEmail(input.email),
-    phoneNumber: normalizePhoneNumber(input.phoneNumber),
-    firstName: input.firstName.trim(),
-    lastName: input.lastName.trim(),
-  };
+export interface ValidationError {
+  field: string
+  message: string
+  code: string
 }
 
-/**
- * Валидировать данные для обновления гостя
- */
-export function validateUpdateGuestInput(input: UpdateGuestInput): void {
-  const errors: Array<{ field: string; message: string }> = [];
+export class GuestValidator {
+  /**
+   * Validate create guest input
+   * @returns Array of validation errors (empty if valid)
+   */
+  validate(input: CreateGuestInput): ValidationError[] {
+    const errors: ValidationError[] = []
 
-  if (input.email !== undefined) {
-    try {
-      validateEmail(input.email);
-    } catch (error: any) {
-      errors.push({ field: 'email', message: error.message });
+    // Email validation
+    if (!input.email || input.email.trim().length === 0) {
+      errors.push({
+        field: 'email',
+        message: 'Email is required',
+        code: 'EMAIL_REQUIRED',
+      })
+    } else if (!this.isValidEmail(input.email)) {
+      errors.push({
+        field: 'email',
+        message: 'Email format is invalid',
+        code: 'EMAIL_INVALID',
+      })
     }
+
+    // Phone validation
+    if (!input.phone || input.phone.trim().length === 0) {
+      errors.push({
+        field: 'phone',
+        message: 'Phone is required',
+        code: 'PHONE_REQUIRED',
+      })
+    } else if (!this.isValidPhone(input.phone)) {
+      errors.push({
+        field: 'phone',
+        message: 'Phone format is invalid (min 10 digits)',
+        code: 'PHONE_INVALID',
+      })
+    }
+
+    // First name validation
+    if (!input.firstName || input.firstName.trim().length === 0) {
+      errors.push({
+        field: 'firstName',
+        message: 'First name is required',
+        code: 'FIRST_NAME_REQUIRED',
+      })
+    } else if (input.firstName.length > 100) {
+      errors.push({
+        field: 'firstName',
+        message: 'First name must not exceed 100 characters',
+        code: 'FIRST_NAME_TOO_LONG',
+      })
+    }
+
+    // Last name validation
+    if (!input.lastName || input.lastName.trim().length === 0) {
+      errors.push({
+        field: 'lastName',
+        message: 'Last name is required',
+        code: 'LAST_NAME_REQUIRED',
+      })
+    } else if (input.lastName.length > 100) {
+      errors.push({
+        field: 'lastName',
+        message: 'Last name must not exceed 100 characters',
+        code: 'LAST_NAME_TOO_LONG',
+      })
+    }
+
+    // Referral code validation (optional but if provided, validate format)
+    if (input.referredBy && input.referredBy.trim().length > 0) {
+      if (!this.isValidId(input.referredBy)) {
+        errors.push({
+          field: 'referredBy',
+          message: 'Referral code format is invalid',
+          code: 'REFERRAL_CODE_INVALID',
+        })
+      }
+    }
+
+    return errors
   }
 
-  if (input.phoneNumber !== undefined) {
-    try {
-      validatePhoneNumber(input.phoneNumber);
-    } catch (error: any) {
-      errors.push({ field: 'phoneNumber', message: error.message });
-    }
+  /**
+   * Check if validation passed
+   */
+  isValid(input: CreateGuestInput): boolean {
+    return this.validate(input).length === 0
   }
 
-  if (input.firstName !== undefined) {
-    if (input.firstName.length < 2 || input.firstName.length > 50) {
-      errors.push({ field: 'firstName', message: 'First name must be between 2 and 50 characters' });
-    }
+  /**
+   * Get validation errors as a map
+   */
+  getErrorsMap(input: CreateGuestInput): Record<string, string> {
+    const errors = this.validate(input)
+    return errors.reduce(
+      (map, error) => {
+        map[error.field] = error.message
+        return map
+      },
+      {} as Record<string, string>,
+    )
   }
 
-  if (input.lastName !== undefined) {
-    if (input.lastName.length < 2 || input.lastName.length > 50) {
-      errors.push({ field: 'lastName', message: 'Last name must be between 2 and 50 characters' });
-    }
+  /**
+   * Validate email format
+   * RFC 5322 simplified
+   */
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email) && email.length <= 255
   }
 
-  if (errors.length > 0) {
-    throw ValidationError.multipleErrors(errors);
+  /**
+   * Validate phone format (at least 10 digits)
+   */
+  private isValidPhone(phone: string): boolean {
+    const digitsOnly = phone.replace(/\D/g, '')
+    return digitsOnly.length >= 10
+  }
+
+  /**
+   * Validate ID format (UUID v4 or alphanumeric with hyphens)
+   */
+  private isValidId(id: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const alphanumericRegex = /^[a-zA-Z0-9_-]+$/
+    return uuidRegex.test(id) || alphanumericRegex.test(id)
   }
 }

@@ -1,57 +1,90 @@
 /**
- * IGuestRepository - интерфейс для доступа к данным клиентов
+ * IGuestRepository Interface
+ * 
+ * Contract for guest data persistence layer.
+ * Abstracts the storage mechanism (API, database, etc).
  */
 
-import type { Guest, GuestStatistics, CreateGuestInput, UpdateGuestInput, GuestFilters } from '../entities';
+import { Guest } from '../entities/guest/Guest'
 
 export interface IGuestRepository {
   /**
-   * Получить клиента по ID
+   * Create a new guest
+   * @param guest Guest entity
+   * @returns Created guest
    */
-  findById(id: string): Promise<Guest | null>;
+  create(guest: Guest): Promise<Guest>
 
   /**
-   * Получить клиента по email
+   * Get guest by ID
+   * @param id Guest ID
+   * @returns Guest or null if not found
    */
-  findByEmail(email: string): Promise<Guest | null>;
+  getById(id: string): Promise<Guest | null>
 
   /**
-   * Получить клиента по номеру телефона
+   * Get guest by email
+   * @param email Email address
+   * @returns Guest or null if not found
    */
-  findByPhoneNumber(phoneNumber: string): Promise<Guest | null>;
+  getByEmail(email: string): Promise<Guest | null>
 
   /**
-   * Получить всех клиентов с фильтрами
+   * Get guest by phone
+   * @param phone Phone number
+   * @returns Guest or null if not found
    */
-  findAll(filters?: GuestFilters): Promise<Guest[]>;
+  getByPhone(phone: string): Promise<Guest | null>
 
   /**
-   * Количество клиентов
+   * Get guest by referral code
+   * @param code Referral code
+   * @returns Guest or null if not found
    */
-  count(filters?: GuestFilters): Promise<number>;
+  getByReferralCode(code: string): Promise<Guest | null>
 
   /**
-   * Создать нового клиента
+   * Update guest
+   * @param id Guest ID
+   * @param data Updated guest data
+   * @returns Updated guest
    */
-  create(input: CreateGuestInput): Promise<Guest>;
+  update(id: string, data: Partial<any>): Promise<Guest>
 
   /**
-   * Обновить клиента
+   * List guests with pagination
+   * @param limit Number of records
+   * @param offset Pagination offset
+   * @returns Array of guests
    */
-  update(id: string, input: UpdateGuestInput): Promise<Guest>;
+  list(limit: number, offset: number): Promise<Guest[]>
 
   /**
-   * Удалить клиента
+   * Search guests by email or phone
+   * @param query Search query
+   * @param limit Results limit
+   * @returns Array of matching guests
    */
-  delete(id: string): Promise<void>;
+  search(query: string, limit: number): Promise<Guest[]>
 
   /**
-   * Найти всех клиентов ресторана
+   * Get guests by tier
+   * @param tier Tier name
+   * @param limit Results limit
+   * @returns Array of guests in tier
    */
-  findByRestaurantId(restaurantId: string, filters?: GuestFilters): Promise<Guest[]>;
+  getByTier(tier: string, limit: number): Promise<Guest[]>
 
   /**
-   * Получить статистику клиента
+   * Get referrals for a guest
+   * @param guestId Guest ID
+   * @returns Array of guest IDs referred by this guest
    */
-  getStatistics(guestId: string): Promise<GuestStatistics | null>;
+  getReferrals(guestId: string): Promise<string[]>
+
+  /**
+   * Delete guest (soft delete)
+   * @param id Guest ID
+   */
+  delete(id: string): Promise<void>
 }
