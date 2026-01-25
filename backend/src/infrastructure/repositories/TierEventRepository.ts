@@ -4,79 +4,51 @@ import { TierEventEntity } from '../../domain/entities';
 
 @injectable()
 export class TierEventRepository implements ITierEventRepository {
-  private events: Map<string, any> = new Map();
+  private events: Map<string, TierEventEntity> = new Map();
 
   async create(event: TierEventEntity): Promise<void> {
-    this.events.set(event.id, {
-      id: event.id,
-      guestRestaurantId: event.guestRestaurantId,
-      restaurantId: event.restaurantId,
-      fromTierId: event.fromTierId,
-      toTierId: event.toTierId,
-      eventType: event.eventType,
-      reason: event.reason,
-      createdAt: event.createdAt,
-    });
+    this.events.set(event.id, event);
   }
 
-  async getByGuest(
-    guestRestaurantId: string,
-    limit: number = 20,
-  ): Promise<TierEventEntity[]> {
+  async getByGuest(guestRestaurantId: string, limit: number = 50): Promise<TierEventEntity[]> {
     const results: TierEventEntity[] = [];
-    let count = 0;
 
-    for (const [, data] of this.events) {
-      if (data.guestRestaurantId === guestRestaurantId) {
-        results.push(this.mapToEntity(data));
-        count++;
-
-        if (count >= limit) break;
+    for (const [, event] of this.events) {
+      if (event.guestRestaurantId === guestRestaurantId) {
+        results.push(event);
       }
+
+      if (results.length >= limit) break;
     }
 
     return results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async getByRestaurant(
-    restaurantId: string,
-    limit: number = 100,
-  ): Promise<TierEventEntity[]> {
+  async getByRestaurant(restaurantId: string, limit: number = 100): Promise<TierEventEntity[]> {
     const results: TierEventEntity[] = [];
-    let count = 0;
 
-    for (const [, data] of this.events) {
-      if (data.restaurantId === restaurantId) {
-        results.push(this.mapToEntity(data));
-        count++;
-
-        if (count >= limit) break;
+    for (const [, event] of this.events) {
+      if (event.restaurantId === restaurantId) {
+        results.push(event);
       }
+
+      if (results.length >= limit) break;
     }
 
     return results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async getLatestUpgrade(
-    guestRestaurantId: string,
-  ): Promise<TierEventEntity | null> {
-    let latest: any | null = null;
+  async getLatestUpgrade(guestRestaurantId: string): Promise<TierEventEntity | null> {
+    let latest: TierEventEntity | null = null;
 
-    for (const [, data] of this.events) {
-      if (
-        data.guestRestaurantId === guestRestaurantId &&
-        data.eventType === 'UPGRADE'
-      ) {
-        if (!latest || data.createdAt > latest.createdAt) {
-          latest = data;
+    for (const [, event] of this.events) {
+      if (event.guestRestaurantId === guestRestaurantId && event.eventType === 'UPGRADE') {
+        if (!latest || event.createdAt > latest.createdAt) {
+          latest = event;
         }
       }
     }
 
-    return latest ? this.mapToEntity(latest) : null;
-  }
-
-  private mapToEntity(data: any): TierEventEntity {
-    return TierEventEntity.create(data);
+    return latest;
   }
 }
