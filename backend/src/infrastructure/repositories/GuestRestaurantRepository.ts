@@ -1,59 +1,90 @@
 import { injectable } from 'inversify';
 import { IGuestRestaurantRepository } from '../../domain/repositories';
 import { GuestRestaurantEntity } from '../../domain/entities';
-import { db } from '../database';
 
 @injectable()
 export class GuestRestaurantRepository implements IGuestRestaurantRepository {
-  async create(guestRestaurant: GuestRestaurantEntity): Promise<void> {
-    const query = `
-      INSERT INTO guest_restaurant (id, guest_id, restaurant_id, balance_points, current_tier_id, visits_count, last_visit_at, active_card_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+  private data: Map<string, any> = new Map();
 
-    await db.run(query, [
-      guestRestaurant.id,
-      guestRestaurant.guestId,
-      guestRestaurant.restaurantId,
-      guestRestaurant.balancePoints,
-      guestRestaurant.currentTierId,
-      guestRestaurant.visitsCount,
-      guestRestaurant.lastVisitAt,
-      guestRestaurant.activeCardId,
-      guestRestaurant.createdAt,
-      guestRestaurant.updatedAt,
-    ]);
+  async create(entity: GuestRestaurantEntity): Promise<void> {
+    this.data.set(entity.id, {
+      id: entity.id,
+      guestId: entity.guestId,
+      restaurantId: entity.restaurantId,
+      currentTier: entity.currentTier,
+      balancePoints: entity.balancePoints,
+      isBlocked: entity.isBlocked,
+      blockReason: entity.blockReason,
+      activeCardId: entity.activeCardId,
+      visitsCount: entity.visitsCount,
+      lastVisitAt: entity.lastVisitAt,
+      createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
+    });
   }
 
   async getById(id: string): Promise<GuestRestaurantEntity | null> {
-    const query = `SELECT * FROM guest_restaurant WHERE id = ? LIMIT 1`;
-    const row: any = await db.get(query, [id]);
-    return row ? GuestRestaurantEntity.fromDatabase(row) : null;
+    const data = this.data.get(id);
+    if (!data) return null;
+    return this.mapToEntity(data);
   }
 
-  async getByGuestAndRestaurant(guestId: string, restaurantId: string): Promise<GuestRestaurantEntity | null> {
-    const query = `SELECT * FROM guest_restaurant WHERE guest_id = ? AND restaurant_id = ? LIMIT 1`;
-    const row: any = await db.get(query, [guestId, restaurantId]);
-    return row ? GuestRestaurantEntity.fromDatabase(row) : null;
+  async getByGuestAndRestaurant(
+    guestId: string,
+    restaurantId: string,
+  ): Promise<GuestRestaurantEntity | null> {
+    for (const [, data] of this.data) {
+      if (data.guestId === guestId && data.restaurantId === restaurantId) {
+        return this.mapToEntity(data);
+      }
+    }
+    return null;
   }
 
   async updateBalance(id: string, newBalance: number): Promise<void> {
-    const query = `UPDATE guest_restaurant SET balance_points = ?, updated_at = ? WHERE id = ?`;
-    await db.run(query, [newBalance, new Date(), id]);
+    const existing = this.data.get(id);
+    if (existing) {
+      existing.balancePoints = newBalance;
+      existing.updatedAt = new Date();
+    }
   }
 
   async updateLastVisit(id: string): Promise<void> {
-    const query = `UPDATE guest_restaurant SET last_visit_at = ?, updated_at = ?, visits_count = visits_count + 1 WHERE id = ?`;
-    await db.run(query, [new Date(), new Date(), id]);
+    const existing = this.data.get(id);
+    if (existing) {
+      existing.lastVisitAt = new Date();
+      existing.visitsCount = (existing.visitsCount || 0) + 1;
+      existing.updatedAt = new Date();
+    }
   }
 
-  async upgradeTier(id: string, newTierId: string): Promise<void> {
-    const query = `UPDATE guest_restaurant SET current_tier_id = ?, updated_at = ? WHERE id = ?`;
-    await db.run(query, [newTierId, new Date(), id]);
+  async block(id: string, reason: string): Promise<void> {
+    const existing = this.data.get(id);
+    if (existing) {
+      existing.isBlocked = true;
+      existing.blockReason = reason;
+      existing.updatedAt = new Date();
+    }
   }
 
-  async setActiveCard(id: string, cardId: string): Promise<void> {
-    const query = `UPDATE guest_restaurant SET active_card_id = ?, updated_at = ? WHERE id = ?`;
-    await db.run(query, [cardId, new Date(), id]);
+  async unblock(id: string): Promise<void> {
+    const existing = this.data.get(id);
+    if (existing) {
+      existing.isBlocked = false;
+      existing.blockReason = null;
+      existing.updatedAt = new Date();
+    }
+  }
+
+  async upgradeTier(id: string, tierId: string): Promise<void> {
+    const existing = this.data.get(id);
+    if (existing) {
+      existing.currentTier = { id: tierId };
+      existing.updatedAt = new Date();
+    }
+  }
+
+  private mapToEntity(data: any): GuestRestaurantEntity {
+    return GuestRestaurantEntity.create(data);
   }
 }
