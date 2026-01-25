@@ -1,57 +1,78 @@
 import { injectable } from 'inversify';
 import { IBalanceDetailRepository } from '../../domain/repositories';
-import { db } from '../database';
-
-interface BalanceDetailEntry {
-  guestRestaurantId: string;
-  transactionId: string;
-  type: 'POINTS_AWARDED' | 'POINTS_SPENT' | 'POINTS_REVERTED';
-  basePoints?: number;
-  bonusPoints?: number;
-  oldBalance: number;
-  newBalance: number;
-  createdAt: Date;
-}
+import { BalanceDetailEntity } from '../../domain/entities';
 
 @injectable()
 export class BalanceDetailRepository implements IBalanceDetailRepository {
-  async createEntry(entry: BalanceDetailEntry): Promise<void> {
-    const query = `
-      INSERT INTO balance_detail (guest_restaurant_id, transaction_id, type, base_points, bonus_points, old_balance, new_balance, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+  private details: Map<string, any> = new Map();
 
-    await db.run(query, [
-      entry.guestRestaurantId,
-      entry.transactionId,
-      entry.type,
-      entry.basePoints || 0,
-      entry.bonusPoints || 0,
-      entry.oldBalance,
-      entry.newBalance,
-      entry.createdAt,
-    ]);
+  async createEntry(data: any): Promise<void> {
+    const id = `bd-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    this.details.set(id, {
+      id,
+      guestRestaurantId: data.guestRestaurantId,
+      transactionId: data.transactionId,
+      type: data.type,
+      basePoints: data.basePoints,
+      bonusPoints: data.bonusPoints,
+      oldBalance: data.oldBalance,
+      newBalance: data.newBalance,
+      createdAt: data.createdAt || new Date(),
+    });
   }
 
-  async getHistory(guestRestaurantId: string, limit: number = 100, offset: number = 0): Promise<any[]> {
-    const query = `
-      SELECT * FROM balance_detail
-      WHERE guest_restaurant_id = ?
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `;
+  async getByGuest(
+    guestRestaurantId: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<BalanceDetailEntity[]> {
+    const results: BalanceDetailEntity[] = [];
+    let count = 0;
+    let skipped = 0;
 
-    return await db.all(query, [guestRestaurantId, limit, offset]);
+    for (const [, data] of this.details) {
+      if (data.guestRestaurantId !== guestRestaurantId) continue;
+
+      if (skipped < offset) {
+        skipped++;
+        continue;
+      }
+
+      results.push(this.mapToEntity(data));
+      count++;
+
+      if (count >= limit) break;
+    }
+
+    return results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async getTotalPointsAwarded(guestRestaurantId: string): Promise<number> {
-    const query = `
-      SELECT COALESCE(SUM(base_points + bonus_points), 0) as total
-      FROM balance_detail
-      WHERE guest_restaurant_id = ? AND type = 'POINTS_AWARDED'
-    `;
+  async getByTransaction(
+    transactionId: string,
+  ): Promise<BalanceDetailEntity | null> {
+    for (const [, data] of this.details) {
+      if (data.transactionId === transactionId) {
+        return this.mapToEntity(data);
+      }
+    }
+    return null;
+  }
 
-    const result: any = await db.get(query, [guestRestaurantId]);
-    return result.total || 0;
+  async getTotalPointsAwarded(
+    guestRestaurantId: string,
+  ): Promise<number> {
+    let total = 0;
+
+    for (const [, data] of this.details) {
+      if (data.guestRestaurantId === guestRestaurantId) {
+        total += (data.basePoints || 0) + (data.bonusPoints || 0);
+      }
+    }
+
+    return total;
+  }
+
+  private mapToEntity(data: any): BalanceDetailEntity {
+    return BalanceDetailEntity.create(data);
   }
 }
