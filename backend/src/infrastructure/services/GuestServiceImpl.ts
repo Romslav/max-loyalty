@@ -1,1 +1,179 @@
-/**\n * GuestServiceImpl - Guest Management Service Implementation\n *\n * Реализует все операции с гостями:\n * - Регистрация\n * - Верификация телефона\n * - Получение информации\n * - Блокировка/разблокировка\n * - Обновление профиля\n *\n * @author Phase 2 Implementation\n * @date 2026-01-25\n */\n\nimport { injectable, inject } from 'inversify';\nimport { IGuestService } from '../../domain/services/GuestService';\nimport { IGuestRepository, IPhoneVerificationRepository } from '../../domain/repositories';\nimport { TYPES } from '../../shared/types';\nimport { GuestEntity } from '../../domain/entities';\nimport { ErrorCode } from '../../shared/types';\n\ninterface RegisterGuestInput {\n  phone: string;\n  name: string;\n  email?: string;\n}\n\ninterface VerifyPhoneInput {\n  phone: string;\n  verificationCode: string;\n}\n\ninterface BlockGuestInput {\n  guestId: string;\n  reason: string;\n}\n\ninterface UpdateGuestInfoInput {\n  guestId: string;\n  name?: string;\n  email?: string;\n}\n\n@injectable()\nexport class GuestServiceImpl implements IGuestService {\n  constructor(\n    @inject(TYPES.Repositories.IGuestRepository)\n    private guestRepository: IGuestRepository,\n\n    @inject(TYPES.Repositories.IPhoneVerificationRepository)\n    private phoneVerificationRepository: IPhoneVerificationRepository,\n  ) {}\n\n  /**\n   * Регистрирует нового гостя\n   *\n   * Валидирует:\n   * - Phone и name обязательны\n   * - Phone не должен быть зарегистрирован\n   * - Email формат (если указан)\n   *\n   * @param input Данные для регистрации\n   * @returns Созданный гость с ID\n   * @throws ErrorCode.VALIDATION_ERROR если данные невалидны\n   * @throws ErrorCode.GUEST_ALREADY_EXISTS если гость с таким телефоном уже есть\n   *\n   * @example\n   * const guest = await guestService.registerGuest({\n   *   phone: '+79991234567',\n   *   name: 'Иван Петров',\n   *   email: 'ivan@example.com'\n   * });\n   * // Returns: { id: 'g-123', phone, name, isVerified: false, ... }\n   */\n  async registerGuest(input: RegisterGuestInput): Promise<GuestEntity> {\n    // 1️⃣ ВАЛИДАЦИЯ ВХОДНЫХ ДАННЫХ\n    if (!input.phone || !input.name) {\n      throw {\n        code: ErrorCode.VALIDATION_ERROR,\n        message: 'Phone и name обязательны для регистрации',\n      };\n    }\n\n    // Валидирование формата телефона (базовая проверка)\n    if (!/^\\+?[0-9]{10,15}$/.test(input.phone.replace(/[^0-9+]/g, ''))) {\n      throw {\n        code: ErrorCode.VALIDATION_ERROR,\n        message: 'Неверный формат телефона',\n      };\n    }\n\n    // Нормализуем телефон\n    const normalizedPhone = input.phone.replace(/[^0-9+]/g, '');\n\n    // 2️⃣ ПРОВЕРКА ДУБЛИРОВАНИЯ\n    const existing = await this.guestRepository.getByPhone(normalizedPhone);\n    if (existing) {\n      throw {\n        code: ErrorCode.GUEST_ALREADY_EXISTS,\n        message: `Гость с номером ${input.phone} уже зарегистрирован`,\n      };\n    }\n\n    // 3️⃣ СОЗДАНИЕ СУЩНОСТИ\n    const guest = GuestEntity.create({\n      id: this.generateGuestId(),\n      phone: normalizedPhone,\n      name: input.name.trim(),\n      email: input.email?.trim(),\n      isVerified: false,\n      isBlocked: false,\n      blockReason: undefined,\n      createdAt: new Date(),\n      updatedAt: new Date(),\n    });\n\n    // 4️⃣ СОХРАНЕНИЕ\n    await this.guestRepository.create(guest);\n\n    console.log(`✅ Guest registered: ${guest.id} (${input.phone})`);\n\n    return guest;\n  }\n\n  /**\n   * Верифицирует номер телефона гостя\n   *\n   * Логика:\n   * - Получить последнюю SMS верификацию\n   * - Проверить код\n   * - Проверить срок действия (10 минут)\n   * - Отметить как верифицировано\n   *\n   * @param input Phone и verification code\n   * @returns Верифицированный гость\n   * @throws ErrorCode.GUEST_NOT_FOUND если гость не найден\n   * @throws ErrorCode.VERIFICATION_FAILED если код неверный\n   * @throws ErrorCode.VERIFICATION_EXPIRED если код истек\n   *\n   * @example\n   * const guest = await guestService.verifyPhone({\n   *   phone: '+79991234567',\n   *   verificationCode: '123456'\n   * });\n   * // Returns: { ...guest, isVerified: true }\n   */\n  async verifyPhone(input: VerifyPhoneInput): Promise<GuestEntity> {\n    // 1️⃣ ПОЛУЧИТЬ ГОСТЯ\n    const normalizedPhone = input.phone.replace(/[^0-9+]/g, '');\n    const guest = await this.guestRepository.getByPhone(normalizedPhone);\n\n    if (!guest) {\n      throw {\n        code: ErrorCode.GUEST_NOT_FOUND,\n        message: `Гость с номером ${input.phone} не найден`,\n      };\n    }\n\n    // 2️⃣ ПОЛУЧИТЬ ПОСЛЕДНЮЮ ВЕРИФИКАЦИЮ\n    const verification = await this.phoneVerificationRepository\n      .getLatestForPhone(normalizedPhone);\n\n    if (!verification) {\n      throw {\n        code: ErrorCode.VERIFICATION_FAILED,\n        message: 'SMS верификация не была отправлена',\n      };\n    }\n\n    // 3️⃣ ПРОВЕРИТЬ СРОК ДЕЙСТВИЯ (10 минут)\n    const now = new Date();\n    const expiresAt = new Date(verification.expiresAt);\n    if (now > expiresAt) {\n      throw {\n        code: ErrorCode.VERIFICATION_EXPIRED,\n        message: 'Код верификации истек (10 минут)',\n      };\n    }\n\n    // 4️⃣ ПРОВЕРИТЬ КОД\n    if (verification.verificationCode !== input.verificationCode) {\n      // Увеличить счетчик попыток\n      verification.attempts++;\n      await this.phoneVerificationRepository.update(verification.id, verification);\n\n      // Максимум 3 попытки\n      if (verification.attempts >= 3) {\n        throw {\n          code: ErrorCode.VERIFICATION_FAILED,\n          message: 'Превышено максимальное количество попыток (3)',\n        };\n      }\n\n      throw {\n        code: ErrorCode.VERIFICATION_FAILED,\n        message: `Неверный код (осталось ${3 - verification.attempts} попыток)`,\n      };\n    }\n\n    // 5️⃣ ОТМЕТИТЬ КАК ВЕРИФИЦИРОВАНО\n    guest.markAsVerified();\n    await this.guestRepository.update(guest.id, guest);\n\n    // Отметить верификацию как завершенную\n    verification.verified = true;\n    verification.verifiedAt = new Date();\n    await this.phoneVerificationRepository.update(verification.id, verification);\n\n    console.log(`✅ Phone verified: ${guest.id} (${input.phone})`);\n\n    return guest;\n  }\n\n  /**\n   * Получает информацию о гостя по ID\n   *\n   * @param guestId ID гостя\n   * @returns Гость или null если не найден\n   *\n   * @example\n   * const guest = await guestService.getGuest('g-123');\n   */\n  async getGuest(guestId: string): Promise<GuestEntity | null> {\n    if (!guestId) {\n      throw {\n        code: ErrorCode.VALIDATION_ERROR,\n        message: 'guestId обязателен',\n      };\n    }\n\n    const guest = await this.guestRepository.getById(guestId);\n\n    if (!guest) {\n      throw {\n        code: ErrorCode.GUEST_NOT_FOUND,\n        message: `Гость ${guestId} не найден`,\n      };\n    }\n\n    return guest;\n  }\n\n  /**\n   * Получает гостя по номеру телефона\n   *\n   * @param phone Номер телефона\n   * @returns Гость или null\n   */\n  async getByPhone(phone: string): Promise<GuestEntity | null> {\n    const normalizedPhone = phone.replace(/[^0-9+]/g, '');\n    return this.guestRepository.getByPhone(normalizedPhone);\n  }\n\n  /**\n   * Блокирует гостя с указанной причиной\n   *\n   * Случаи блокировки:\n   * - Мошенничество\n   * - Нарушение правил\n   * - По запросу администратора\n   * - Запрос самого гостя\n   *\n   * @param input Guest ID и reason\n   * @throws ErrorCode.GUEST_NOT_FOUND если гость не найден\n   * @throws ErrorCode.GUEST_ALREADY_BLOCKED если уже заблокирован\n   *\n   * @example\n   * await guestService.blockGuest({\n   *   guestId: 'g-123',\n   *   reason: 'Подозрение на мошенничество'\n   * });\n   */\n  async blockGuest(input: BlockGuestInput): Promise<void> {\n    const guest = await this.getGuest(input.guestId);\n\n    if (guest.isBlocked) {\n      throw {\n        code: ErrorCode.GUEST_ALREADY_BLOCKED,\n        message: `Гость уже заблокирован (причина: ${guest.blockReason})`,\n      };\n    }\n\n    guest.block(input.reason);\n    await this.guestRepository.update(input.guestId, guest);\n\n    console.log(`⛔ Guest blocked: ${input.guestId} (reason: ${input.reason})`);\n  }\n\n  /**\n   * Разблокирует гостя\n   *\n   * @param guestId ID гостя\n   * @throws ErrorCode.GUEST_NOT_FOUND если гость не найден\n   * @throws ErrorCode.GUEST_NOT_BLOCKED если гость не заблокирован\n   *\n   * @example\n   * await guestService.unblockGuest('g-123');\n   */\n  async unblockGuest(guestId: string): Promise<void> {\n    const guest = await this.getGuest(guestId);\n\n    if (!guest.isBlocked) {\n      throw {\n        code: ErrorCode.GUEST_NOT_BLOCKED,\n        message: 'Гость не заблокирован',\n      };\n    }\n\n    guest.unblock();\n    await this.guestRepository.update(guestId, guest);\n\n    console.log(`✅ Guest unblocked: ${guestId}`);\n  }\n\n  /**\n   * Обновляет информацию о гостя\n   *\n   * Может обновлять:\n   * - name\n   * - email\n   *\n   * @param input Guest ID и поля для обновления\n   * @throws ErrorCode.GUEST_NOT_FOUND если гость не найден\n   *\n   * @example\n   * await guestService.updateGuestInfo({\n   *   guestId: 'g-123',\n   *   name: 'Иван Новиков',\n   *   email: 'ivan.novikov@example.com'\n   * });\n   */\n  async updateGuestInfo(input: UpdateGuestInfoInput): Promise<void> {\n    const guest = await this.getGuest(input.guestId);\n\n    if (input.name) {\n      guest.updateName(input.name.trim());\n    }\n\n    if (input.email) {\n      guest.updateEmail(input.email.trim());\n    }\n\n    guest.updatedAt = new Date();\n    await this.guestRepository.update(input.guestId, guest);\n\n    console.log(`✏️ Guest updated: ${input.guestId}`);\n  }\n\n  /**\n   * Отправляет SMS верификацию\n   * (будет реализовано в День 8-9 с Twilio)\n   *\n   * @param phone Номер телефона\n   */\n  async sendVerificationSMS(phone: string): Promise<string> {\n    const normalizedPhone = phone.replace(/[^0-9+]/g, '');\n\n    // Генерируем 6-значный код\n    const verificationCode = this.generate6DigitCode();\n\n    // TODO: Отправить через Twilio в День 8-9\n    // const message = `Your verification code: ${verificationCode}`;\n    // await twilioService.sendSMS(normalizedPhone, message);\n\n    // Временно сохраняем локально\n    console.log(`📱 SMS Code: ${verificationCode} (TEMPORARY - remove in production)`);\n\n    return verificationCode;\n  }\n\n  // ===== PRIVATE HELPERS =====\n\n  /**\n   * Генерирует уникальный ID для гостя\n   * Формат: g-{timestamp}-{random}\n   */\n  private generateGuestId(): string {\n    return `g-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;\n  }\n\n  /**\n   * Генерирует случайный 6-значный код\n   */\n  private generate6DigitCode(): string {\n    return Math.floor(100000 + Math.random() * 900000).toString();\n  }\n}\n\nexport { RegisterGuestInput, VerifyPhoneInput, BlockGuestInput, UpdateGuestInfoInput };\n
+import { injectable, inject } from 'inversify';
+import { IGuestService } from '../../domain/services';
+import { IGuestRepository, IPhoneVerificationRepository } from '../../domain/repositories';
+import { TYPES } from '../../shared/types';
+import { GuestEntity, PhoneVerificationEntity } from '../../domain/entities';
+import { ErrorCode } from '../../shared/types';
+
+@injectable()
+export class GuestServiceImpl implements IGuestService {
+  constructor(
+    @inject(TYPES.Repositories.IGuestRepository)
+    private guestRepository: IGuestRepository,
+
+    @inject(TYPES.Repositories.IPhoneVerificationRepository)
+    private phoneVerificationRepository: IPhoneVerificationRepository,
+  ) {}
+
+  async registerGuest(input: { phone: string; name: string; email?: string }): Promise<any> {
+    this.validatePhoneFormat(input.phone);
+
+    const normalized = this.normalizePhone(input.phone);
+    const existing = await this.guestRepository.getByPhone(normalized);
+
+    if (existing) {
+      throw {
+        code: ErrorCode.GUEST_ALREADY_EXISTS,
+        message: `Guest with phone ${normalized} already exists`,
+      };
+    }
+
+    const guest = GuestEntity.create({
+      id: `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      phone: normalized,
+      name: input.name.trim(),
+      email: input.email?.trim(),
+      isVerified: false,
+      isBlocked: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await this.guestRepository.create(guest);
+    console.log(`✅ Guest registered: ${guest.id}`);
+
+    return guest;
+  }
+
+  async verifyPhone(guestId: string, code: string): Promise<{ verified: boolean; message?: string }> {
+    const guest = await this.guestRepository.getById(guestId);
+
+    if (!guest) {
+      throw {
+        code: ErrorCode.GUEST_NOT_FOUND,
+        message: `Guest ${guestId} not found`,
+      };
+    }
+
+    const verification = await this.phoneVerificationRepository.getLatestByPhone(guest.phone);
+
+    if (!verification) {
+      throw {
+        code: ErrorCode.PHONE_VERIFICATION_FAILED,
+        message: 'No verification code found',
+      };
+    }
+
+    const isExpired = await this.phoneVerificationRepository.isExpired(guest.phone);
+    if (isExpired) {
+      throw {
+        code: ErrorCode.PHONE_VERIFICATION_EXPIRED,
+        message: 'Verification code expired',
+      };
+    }
+
+    if (verification.code !== code) {
+      await this.phoneVerificationRepository.incrementAttempts(guest.phone);
+      throw {
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Invalid verification code',
+      };
+    }
+
+    guest.verify();
+    await this.guestRepository.update(guestId, guest);
+    await this.phoneVerificationRepository.markVerified(guest.phone);
+
+    console.log(`✅ Phone verified: ${guest.phone}`);
+
+    return { verified: true };
+  }
+
+  async getGuest(guestId: string): Promise<any> {
+    const guest = await this.guestRepository.getById(guestId);
+
+    if (!guest) {
+      throw {
+        code: ErrorCode.GUEST_NOT_FOUND,
+        message: `Guest ${guestId} not found`,
+      };
+    }
+
+    return guest;
+  }
+
+  async getByPhone(phone: string): Promise<any | null> {
+    const normalized = this.normalizePhone(phone);
+    return this.guestRepository.getByPhone(normalized);
+  }
+
+  async blockGuest(guestId: string, reason: string): Promise<void> {
+    const guest = await this.getGuest(guestId);
+    guest.block(reason);
+    await this.guestRepository.update(guestId, guest);
+    console.log(`🔒 Guest blocked: ${guestId}`);
+  }
+
+  async unblockGuest(guestId: string): Promise<void> {
+    const guest = await this.getGuest(guestId);
+    guest.unblock();
+    await this.guestRepository.update(guestId, guest);
+    console.log(`🔓 Guest unblocked: ${guestId}`);
+  }
+
+  async updateGuestInfo(guestId: string, updates: Partial<any>): Promise<void> {
+    const guest = await this.getGuest(guestId);
+    Object.assign(guest, updates);
+    await this.guestRepository.update(guestId, guest);
+    console.log(`✏️  Guest info updated: ${guestId}`);
+  }
+
+  async sendVerificationSMS(phone: string): Promise<{ attemptsLeft: number }> {
+    const normalized = this.normalizePhone(phone);
+
+    const code = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+
+    const verification = PhoneVerificationEntity.create({
+      id: `pv-${Date.now()}`,
+      phone: normalized,
+      code,
+      attempts: 0,
+      isVerified: false,
+      expiresAt,
+      createdAt: new Date(),
+    });
+
+    await this.phoneVerificationRepository.create(verification);
+
+    // TODO: Send actual SMS via gateway
+    console.log(`📱 SMS sent to ${normalized}: ${code}`);
+
+    return { attemptsLeft: 3 };
+  }
+
+  async getVerificationAttempts(phone: string): Promise<number> {
+    const normalized = this.normalizePhone(phone);
+    const verification = await this.phoneVerificationRepository.getLatestByPhone(normalized);
+    return verification ? verification.attempts : 0;
+  }
+
+  private validatePhoneFormat(phone: string): void {
+    const phoneRegex = /^[\d\s+\-()]+$/;
+    if (!phoneRegex.test(phone) || phone.length < 10) {
+      throw {
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Invalid phone format',
+      };
+    }
+  }
+
+  private normalizePhone(phone: string): string {
+    let normalized = phone.replace(/[^\d]/g, '');
+    if (!normalized.startsWith('7')) {
+      normalized = '7' + normalized;
+    }
+    return '+' + normalized;
+  }
+}
