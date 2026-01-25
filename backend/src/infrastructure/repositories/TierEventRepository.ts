@@ -1,57 +1,82 @@
 import { injectable } from 'inversify';
 import { ITierEventRepository } from '../../domain/repositories';
-import { db } from '../database';
-
-interface TierEvent {
-  id?: string;
-  guestRestaurantId: string;
-  oldTierId: string;
-  newTierId: string;
-  reason: string;
-  triggeredByTransactionId?: string;
-  createdAt: Date;
-}
+import { TierEventEntity } from '../../domain/entities';
 
 @injectable()
 export class TierEventRepository implements ITierEventRepository {
-  async create(event: TierEvent): Promise<void> {
-    const id = event.id || `te-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const query = `
-      INSERT INTO tier_events (id, guest_restaurant_id, old_tier_id, new_tier_id, reason, triggered_by_transaction_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `;
+  private events: Map<string, any> = new Map();
 
-    await db.run(query, [
-      id,
-      event.guestRestaurantId,
-      event.oldTierId,
-      event.newTierId,
-      event.reason,
-      event.triggeredByTransactionId || null,
-      event.createdAt,
-    ]);
+  async create(event: TierEventEntity): Promise<void> {
+    this.events.set(event.id, {
+      id: event.id,
+      guestRestaurantId: event.guestRestaurantId,
+      restaurantId: event.restaurantId,
+      fromTierId: event.fromTierId,
+      toTierId: event.toTierId,
+      eventType: event.eventType,
+      reason: event.reason,
+      createdAt: event.createdAt,
+    });
   }
 
-  async getByGuest(guestRestaurantId: string, limit: number = 50, offset: number = 0): Promise<TierEvent[]> {
-    const query = `
-      SELECT * FROM tier_events
-      WHERE guest_restaurant_id = ?
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `;
+  async getByGuest(
+    guestRestaurantId: string,
+    limit: number = 20,
+  ): Promise<TierEventEntity[]> {
+    const results: TierEventEntity[] = [];
+    let count = 0;
 
-    return await db.all(query, [guestRestaurantId, limit, offset]);
+    for (const [, data] of this.events) {
+      if (data.guestRestaurantId === guestRestaurantId) {
+        results.push(this.mapToEntity(data));
+        count++;
+
+        if (count >= limit) break;
+      }
+    }
+
+    return results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async getLatest(guestRestaurantId: string): Promise<TierEvent | null> {
-    const query = `
-      SELECT * FROM tier_events
-      WHERE guest_restaurant_id = ?
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
+  async getByRestaurant(
+    restaurantId: string,
+    limit: number = 100,
+  ): Promise<TierEventEntity[]> {
+    const results: TierEventEntity[] = [];
+    let count = 0;
 
-    const row: any = await db.get(query, [guestRestaurantId]);
-    return row || null;
+    for (const [, data] of this.events) {
+      if (data.restaurantId === restaurantId) {
+        results.push(this.mapToEntity(data));
+        count++;
+
+        if (count >= limit) break;
+      }
+    }
+
+    return results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getLatestUpgrade(
+    guestRestaurantId: string,
+  ): Promise<TierEventEntity | null> {
+    let latest: any | null = null;
+
+    for (const [, data] of this.events) {
+      if (
+        data.guestRestaurantId === guestRestaurantId &&
+        data.eventType === 'UPGRADE'
+      ) {
+        if (!latest || data.createdAt > latest.createdAt) {
+          latest = data;
+        }
+      }
+    }
+
+    return latest ? this.mapToEntity(latest) : null;
+  }
+
+  private mapToEntity(data: any): TierEventEntity {
+    return TierEventEntity.create(data);
   }
 }
