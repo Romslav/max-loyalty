@@ -4,38 +4,20 @@ import { GuestRestaurantEntity } from '../../domain/entities';
 
 @injectable()
 export class GuestRestaurantRepository implements IGuestRestaurantRepository {
-  private data: Map<string, any> = new Map();
+  private data: Map<string, GuestRestaurantEntity> = new Map();
 
   async create(entity: GuestRestaurantEntity): Promise<void> {
-    this.data.set(entity.id, {
-      id: entity.id,
-      guestId: entity.guestId,
-      restaurantId: entity.restaurantId,
-      currentTier: entity.currentTier,
-      balancePoints: entity.balancePoints,
-      isBlocked: entity.isBlocked,
-      blockReason: entity.blockReason,
-      activeCardId: entity.activeCardId,
-      visitsCount: entity.visitsCount,
-      lastVisitAt: entity.lastVisitAt,
-      createdAt: entity.createdAt,
-      updatedAt: entity.updatedAt,
-    });
+    this.data.set(entity.id, entity);
   }
 
   async getById(id: string): Promise<GuestRestaurantEntity | null> {
-    const data = this.data.get(id);
-    if (!data) return null;
-    return this.mapToEntity(data);
+    return this.data.get(id) || null;
   }
 
-  async getByGuestAndRestaurant(
-    guestId: string,
-    restaurantId: string,
-  ): Promise<GuestRestaurantEntity | null> {
-    for (const [, data] of this.data) {
-      if (data.guestId === guestId && data.restaurantId === restaurantId) {
-        return this.mapToEntity(data);
+  async getByGuestAndRestaurant(guestId: string, restaurantId: string): Promise<GuestRestaurantEntity | null> {
+    for (const [, entity] of this.data) {
+      if (entity.guestId === guestId && entity.restaurantId === restaurantId) {
+        return entity;
       }
     }
     return null;
@@ -45,7 +27,6 @@ export class GuestRestaurantRepository implements IGuestRestaurantRepository {
     const existing = this.data.get(id);
     if (existing) {
       existing.balancePoints = newBalance;
-      existing.updatedAt = new Date();
     }
   }
 
@@ -54,7 +35,6 @@ export class GuestRestaurantRepository implements IGuestRestaurantRepository {
     if (existing) {
       existing.lastVisitAt = new Date();
       existing.visitsCount = (existing.visitsCount || 0) + 1;
-      existing.updatedAt = new Date();
     }
   }
 
@@ -63,7 +43,6 @@ export class GuestRestaurantRepository implements IGuestRestaurantRepository {
     if (existing) {
       existing.isBlocked = true;
       existing.blockReason = reason;
-      existing.updatedAt = new Date();
     }
   }
 
@@ -71,8 +50,7 @@ export class GuestRestaurantRepository implements IGuestRestaurantRepository {
     const existing = this.data.get(id);
     if (existing) {
       existing.isBlocked = false;
-      existing.blockReason = null;
-      existing.updatedAt = new Date();
+      existing.blockReason = undefined;
     }
   }
 
@@ -80,11 +58,6 @@ export class GuestRestaurantRepository implements IGuestRestaurantRepository {
     const existing = this.data.get(id);
     if (existing) {
       existing.currentTier = { id: tierId };
-      existing.updatedAt = new Date();
     }
-  }
-
-  private mapToEntity(data: any): GuestRestaurantEntity {
-    return GuestRestaurantEntity.create(data);
   }
 }
