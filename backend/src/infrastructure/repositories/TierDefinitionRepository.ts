@@ -1,77 +1,86 @@
 import { injectable } from 'inversify';
 import { ITierDefinitionRepository } from '../../domain/repositories';
 import { TierEntity } from '../../domain/entities';
-import { db } from '../database';
 
 @injectable()
 export class TierDefinitionRepository implements ITierDefinitionRepository {
-  async create(tier: TierEntity): Promise<void> {
-    const query = `
-      INSERT INTO tier_definitions (id, restaurant_id, name, discount_percent, min_points, max_points, benefits, position, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+  private tiers: Map<string, any> = new Map();
 
-    await db.run(query, [
-      tier.id,
-      tier.restaurantId,
-      tier.name,
-      tier.discountPercent,
-      tier.minPoints,
-      tier.maxPoints,
-      JSON.stringify(tier.benefits || []),
-      tier.position,
-      tier.isActive ? 1 : 0,
-      tier.createdAt,
-      tier.updatedAt,
-    ]);
+  async create(tier: TierEntity): Promise<void> {
+    this.tiers.set(tier.id, {
+      id: tier.id,
+      restaurantId: tier.restaurantId,
+      name: tier.name,
+      discountPercent: tier.discountPercent,
+      minPoints: tier.minPoints,
+      maxPoints: tier.maxPoints,
+      createdAt: tier.createdAt,
+    });
   }
 
   async getById(id: string): Promise<TierEntity | null> {
-    const query = `SELECT * FROM tier_definitions WHERE id = ? LIMIT 1`;
-    const row: any = await db.get(query, [id]);
-    return row ? TierEntity.fromDatabase(row) : null;
+    const data = this.tiers.get(id);
+    if (!data) return null;
+    return this.mapToEntity(data);
   }
 
-  async getByRestaurant(restaurantId: string): Promise<TierEntity[]> {
-    const query = `
-      SELECT * FROM tier_definitions
-      WHERE restaurant_id = ? AND is_active = 1
-      ORDER BY position ASC
-    `;
+  async getByRestaurant(
+    restaurantId: string,
+  ): Promise<TierEntity[]> {
+    const results: TierEntity[] = [];
 
-    const rows: any[] = await db.all(query, [restaurantId]);
-    return rows.map((row) => TierEntity.fromDatabase(row));
+    for (const [, data] of this.tiers) {
+      if (data.restaurantId === restaurantId) {
+        results.push(this.mapToEntity(data));
+      }
+    }
+
+    return results.sort((a, b) => a.minPoints - b.minPoints);
   }
 
-  async getByRestaurantAndPoints(restaurantId: string, points: number): Promise<TierEntity | null> {
-    const query = `
-      SELECT * FROM tier_definitions
-      WHERE restaurant_id = ? AND min_points <= ? AND ? <= max_points AND is_active = 1
-      ORDER BY position DESC
-      LIMIT 1
-    `;
+  async getTierByPoints(
+    restaurantId: string,
+    points: number,
+  ): Promise<TierEntity | null> {
+    let bestTier: any | null = null;
 
-    const row: any = await db.get(query, [restaurantId, points, points]);
-    return row ? TierEntity.fromDatabase(row) : null;
+    for (const [, data] of this.tiers) {
+      if (
+        data.restaurantId === restaurantId &&
+        data.minPoints <= points &&
+        data.maxPoints >= points
+      ) {
+        if (!bestTier || data.minPoints > bestTier.minPoints) {
+          bestTier = data;
+        }
+      }
+    }
+
+    return bestTier ? this.mapToEntity(bestTier) : null;
   }
 
-  async update(id: string, tier: TierEntity): Promise<void> {
-    const query = `
-      UPDATE tier_definitions
-      SET name = ?, discount_percent = ?, min_points = ?, max_points = ?, benefits = ?, position = ?, is_active = ?, updated_at = ?
-      WHERE id = ?
-    `;
+  async getNextTier(
+    restaurantId: string,
+    currentTierId: string,
+  ): Promise<TierEntity | null> {
+    const current = await this.getById(currentTierId);
+    if (!current) return null;
 
-    await db.run(query, [
-      tier.name,
-      tier.discountPercent,
-      tier.minPoints,
-      tier.maxPoints,
-      JSON.stringify(tier.benefits || []),
-      tier.position,
-      tier.isActive ? 1 : 0,
-      tier.updatedAt,
-      id,
-    ]);
+    let nextTier: any | null = null;
+    const minRequired = current.maxPoints + 1;
+
+    for (const [, data] of this.tiers) {
+      if (data.restaurantId === restaurantId && data.minPoints >= minRequired) {
+        if (!nextTier || data.minPoints < nextTier.minPoints) {
+          nextTier = data;
+        }
+      }
+    }
+
+    return nextTier ? this.mapToEntity(nextTier) : null;
+  }
+
+  private mapToEntity(data: any): TierEntity {
+    return TierEntity.create(data);
   }
 }
