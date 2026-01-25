@@ -4,64 +4,44 @@ import { PhoneVerificationEntity } from '../../domain/entities';
 
 @injectable()
 export class PhoneVerificationRepository implements IPhoneVerificationRepository {
-  private verifications: Map<string, any> = new Map();
+  private verifications: Map<string, PhoneVerificationEntity> = new Map();
 
   async create(verification: PhoneVerificationEntity): Promise<void> {
-    this.verifications.set(verification.id, {
-      id: verification.id,
-      phone: verification.phone,
-      code: verification.code,
-      attempts: verification.attempts,
-      isVerified: verification.isVerified,
-      verifiedAt: verification.verifiedAt,
-      expiresAt: verification.expiresAt,
-      createdAt: verification.createdAt,
-    });
+    this.verifications.set(verification.id, verification);
   }
 
   async getLatestByPhone(phone: string): Promise<PhoneVerificationEntity | null> {
-    let latest: any | null = null;
+    let latest: PhoneVerificationEntity | null = null;
 
-    for (const [, data] of this.verifications) {
-      if (data.phone === phone) {
-        if (!latest || data.createdAt > latest.createdAt) {
-          latest = data;
+    for (const [, verification] of this.verifications) {
+      if (verification.phone === phone) {
+        if (!latest || verification.createdAt > latest.createdAt) {
+          latest = verification;
         }
       }
     }
 
-    return latest ? this.mapToEntity(latest) : null;
+    return latest;
   }
 
   async incrementAttempts(phone: string): Promise<void> {
-    const existing = await this.getLatestByPhone(phone);
-    if (existing) {
-      const data = this.verifications.get(existing.id);
-      if (data) {
-        data.attempts = (data.attempts || 0) + 1;
-      }
+    const latest = await this.getLatestByPhone(phone);
+    if (latest) {
+      latest.attempts++;
     }
   }
 
   async markVerified(phone: string): Promise<void> {
-    const existing = await this.getLatestByPhone(phone);
-    if (existing) {
-      const data = this.verifications.get(existing.id);
-      if (data) {
-        data.isVerified = true;
-        data.verifiedAt = new Date();
-      }
+    const latest = await this.getLatestByPhone(phone);
+    if (latest) {
+      latest.isVerified = true;
+      latest.verifiedAt = new Date();
     }
   }
 
   async isExpired(phone: string): Promise<boolean> {
-    const existing = await this.getLatestByPhone(phone);
-    if (!existing) return true;
-
-    return existing.expiresAt < new Date();
-  }
-
-  private mapToEntity(data: any): PhoneVerificationEntity {
-    return PhoneVerificationEntity.create(data);
+    const latest = await this.getLatestByPhone(phone);
+    if (!latest) return true;
+    return new Date() > latest.expiresAt;
   }
 }

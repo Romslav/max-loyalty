@@ -4,34 +4,26 @@ import { GuestChildEntity } from '../../domain/entities';
 
 @injectable()
 export class GuestChildrenRepository implements IGuestChildrenRepository {
-  private children: Map<string, any> = new Map();
+  private children: Map<string, GuestChildEntity> = new Map();
 
   async create(child: GuestChildEntity): Promise<void> {
-    this.children.set(child.id, {
-      id: child.id,
-      guestId: child.guestId,
-      name: child.name,
-      dateOfBirth: child.dateOfBirth,
-      createdAt: child.createdAt,
-    });
+    this.children.set(child.id, child);
   }
 
   async getById(id: string): Promise<GuestChildEntity | null> {
-    const data = this.children.get(id);
-    if (!data) return null;
-    return this.mapToEntity(data);
+    return this.children.get(id) || null;
   }
 
   async getByGuestId(guestId: string): Promise<GuestChildEntity[]> {
     const results: GuestChildEntity[] = [];
 
-    for (const [, data] of this.children) {
-      if (data.guestId === guestId) {
-        results.push(this.mapToEntity(data));
+    for (const [, child] of this.children) {
+      if (child.guestId === guestId) {
+        results.push(child);
       }
     }
 
-    return results;
+    return results.sort((a, b) => a.dateOfBirth.getTime() - b.dateOfBirth.getTime());
   }
 
   async update(id: string, updates: Partial<GuestChildEntity>): Promise<void> {
@@ -48,16 +40,12 @@ export class GuestChildrenRepository implements IGuestChildrenRepository {
   async countByGuest(guestId: string): Promise<number> {
     let count = 0;
 
-    for (const [, data] of this.children) {
-      if (data.guestId === guestId) {
+    for (const [, child] of this.children) {
+      if (child.guestId === guestId) {
         count++;
       }
     }
 
     return count;
-  }
-
-  private mapToEntity(data: any): GuestChildEntity {
-    return GuestChildEntity.create(data);
   }
 }

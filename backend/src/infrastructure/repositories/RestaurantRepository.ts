@@ -4,63 +4,34 @@ import { RestaurantEntity } from '../../domain/entities';
 
 @injectable()
 export class RestaurantRepository implements IRestaurantRepository {
-  private restaurants: Map<string, any> = new Map();
+  private restaurants: Map<string, RestaurantEntity> = new Map();
 
   async create(restaurant: RestaurantEntity): Promise<void> {
-    this.restaurants.set(restaurant.id, {
-      id: restaurant.id,
-      name: restaurant.name,
-      inn: restaurant.inn,
-      address: restaurant.address,
-      city: restaurant.city,
-      phone: restaurant.phone,
-      email: restaurant.email,
-      isActive: restaurant.isActive,
-      createdAt: restaurant.createdAt,
-      updatedAt: restaurant.updatedAt,
-    });
+    this.restaurants.set(restaurant.id, restaurant);
   }
 
   async getById(id: string): Promise<RestaurantEntity | null> {
-    const data = this.restaurants.get(id);
-    if (!data) return null;
-    return this.mapToEntity(data);
+    return this.restaurants.get(id) || null;
   }
 
   async getByINN(inn: string): Promise<RestaurantEntity | null> {
-    for (const [, data] of this.restaurants) {
-      if (data.inn === inn) {
-        return this.mapToEntity(data);
+    for (const [, restaurant] of this.restaurants) {
+      if (restaurant.inn === inn) {
+        return restaurant;
       }
     }
     return null;
   }
 
-  async update(
-    id: string,
-    restaurant: RestaurantEntity,
-  ): Promise<void> {
-    if (this.restaurants.has(id)) {
-      this.restaurants.set(id, {
-        id,
-        name: restaurant.name,
-        inn: restaurant.inn,
-        address: restaurant.address,
-        city: restaurant.city,
-        phone: restaurant.phone,
-        email: restaurant.email,
-        isActive: restaurant.isActive,
-        createdAt: restaurant.createdAt,
-        updatedAt: restaurant.updatedAt,
-      });
-    }
+  async update(id: string, restaurant: RestaurantEntity): Promise<void> {
+    this.restaurants.set(id, restaurant);
   }
 
   async getAll(): Promise<RestaurantEntity[]> {
     const results: RestaurantEntity[] = [];
 
-    for (const [, data] of this.restaurants) {
-      results.push(this.mapToEntity(data));
+    for (const [, restaurant] of this.restaurants) {
+      results.push(restaurant);
     }
 
     return results;
@@ -69,16 +40,12 @@ export class RestaurantRepository implements IRestaurantRepository {
   async getByCity(city: string): Promise<RestaurantEntity[]> {
     const results: RestaurantEntity[] = [];
 
-    for (const [, data] of this.restaurants) {
-      if (data.city.toLowerCase() === city.toLowerCase()) {
-        results.push(this.mapToEntity(data));
+    for (const [, restaurant] of this.restaurants) {
+      if (restaurant.city === city) {
+        results.push(restaurant);
       }
     }
 
     return results;
-  }
-
-  private mapToEntity(data: any): RestaurantEntity {
-    return RestaurantEntity.create(data);
   }
 }
