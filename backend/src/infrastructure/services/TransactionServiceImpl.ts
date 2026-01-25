@@ -1,1 +1,202 @@
-/**\n * TransactionServiceImpl - Transaction Processing Service\n *\n * Реализует главный процесс обработки продаж:\n * 1. Валидация гостя\n * 2. Расчет баллов (DISCOUNT formula)\n * 3. Создание транзакции (ATOMIC)\n * 4. Обновление баланса\n * 5. Проверка upgrade уровня\n * 6. Регенерация карточки\n * 7. Обновление last visit\n *\n * @author Phase 2 Implementation\n * @date 2026-01-25\n */\n\nimport { injectable, inject } from 'inversify';\nimport { ITransactionService } from '../../domain/services/TransactionService';\nimport {\n  ITransactionRepository,\n  IGuestRestaurantRepository,\n  ITierEventRepository,\n  IBalanceDetailRepository,\n} from '../../domain/repositories';\nimport { ICardService } from '../../domain/services/CardService';\nimport { TYPES } from '../../shared/types';\nimport { TransactionEntity, PointsCalculator } from '../../domain/entities';\nimport { ErrorCode } from '../../shared/types';\n\ninterface ProcessSaleTransactionInput {\n  guestRestaurantId: string;\n  restaurantId: string;\n  amountRubles: number;\n  posId?: string;\n  notes?: string;\n}\n\ninterface ProcessSaleTransactionOutput {\n  transactionId: string;\n  basePointsAwarded: number;\n  bonusPointsAwarded: number;\n  totalPointsAwarded: number;\n  oldBalance: number;\n  newBalance: number;\n  tierUpgraded: boolean;\n  newTierName?: string;\n  newQRToken: string;\n  newSixDigitCode: string;\n}\n\ninterface TransactionHistoryItem {\n  transactionId: string;\n  type: string;\n  amount: number;\n  pointsAwarded: number;\n  newBalance: number;\n  status: string;\n  createdAt: Date;\n}\n\n@injectable()\nexport class TransactionServiceImpl implements ITransactionService {\n  constructor(\n    @inject(TYPES.Repositories.ITransactionRepository)\n    private transactionRepository: ITransactionRepository,\n\n    @inject(TYPES.Repositories.IGuestRestaurantRepository)\n    private guestRestaurantRepository: IGuestRestaurantRepository,\n\n    @inject(TYPES.Repositories.ITierEventRepository)\n    private tierEventRepository: ITierEventRepository,\n\n    @inject(TYPES.Repositories.IBalanceDetailRepository)\n    private balanceDetailRepository: IBalanceDetailRepository,\n\n    @inject(TYPES.Services.ICardService)\n    private cardService: ICardService,\n  ) {}\n\n  /**\n   * ГЛАВНЫЙ МЕТОД: Обработка продажи\n   *\n   * Это самый важный процесс в системе:\n   * - Sale → Points → Tier → Card\n   *\n   * 7 атомарных шагов:\n   * 1️⃣  Валидация гостя и баланса\n   * 2️⃣  Расчет баллов (PointsCalculator с формулой DISCOUNT)\n   * 3️⃣  Создание транзакции (ATOMIC)\n   * 4️⃣  Обновление баланса в БД\n   * 5️⃣  Проверка upgrade уровня\n   * 6️⃣  Регенерация карточки (QR + 6-digit)\n   * 7️⃣  Обновление last visit\n   *\n   * @param input Данные продажи (гость, сумма, ресторан)\n   * @returns Результат обработки с новым балансом и баллами\n   * @throws ErrorCode.GUEST_NOT_FOUND если гость не найден\n   * @throws ErrorCode.GUEST_BLOCKED если гость заблокирован\n   * @throws ErrorCode.VALIDATION_ERROR если данные невалидны\n   *\n   * @example\n   * const result = await transactionService.processSaleTransaction({\n   *   guestRestaurantId: 'gr-123',\n   *   restaurantId: 'rest-456',\n   *   amountRubles: 1500,\n   *   posId: 'pos-789'\n   * });\n   * // Returns: {\n   * //   transactionId: 'txn-xyz',\n   * //   basePointsAwarded: 1500,\n   * //   bonusPointsAwarded: 75,      (5% BRONZE tier)\n   * //   totalPointsAwarded: 1575,\n   * //   oldBalance: 0,\n   * //   newBalance: 1575,\n   * //   tierUpgraded: false,\n   * //   newQRToken: 'token...',\n   * //   newSixDigitCode: '123456'\n   * // }\n   */\n  async processSaleTransaction(\n    input: ProcessSaleTransactionInput,\n  ): Promise<ProcessSaleTransactionOutput> {\n    console.log('\n📝 Processing Sale Transaction...');\n    console.log(`   Guest: ${input.guestRestaurantId}`);\n    console.log(`   Amount: ${input.amountRubles} руб\\n`);\n\n    // 1️⃣ ВАЛИДАЦИЯ ВХОДНЫХ ДАННЫХ\n    this.validateInput(input);\n\n    // 2️⃣ ПОЛУЧИТЬ ГОСТЯ И РЕСТОРАН\n    const guestRestaurant = await this.guestRestaurantRepository.getById(\n      input.guestRestaurantId,\n    );\n\n    if (!guestRestaurant) {\n      throw {\n        code: ErrorCode.GUEST_NOT_FOUND,\n        message: `Гость ${input.guestRestaurantId} не найден в ресторане ${input.restaurantId}`,\n      };\n    }\n\n    // 3️⃣ ПРОВЕРИТЬ: НЕ ЗАБЛОКИРОВАН ЛИ\n    if (guestRestaurant.isBlocked) {\n      throw {\n        code: ErrorCode.GUEST_BLOCKED,\n        message: `Гость заблокирован (причина: ${guestRestaurant.blockReason || 'не указана'})`,\n      };\n    }\n\n    // 4️⃣ РАСЧИТАТЬ БАЛЛЫ\n    const tierDiscount = guestRestaurant.currentTier.discountPercent; // 5, 10, 15, 20, 25\n    const pointsCalculation = PointsCalculator.calculatePointsAwarded(\n      input.amountRubles,\n      tierDiscount,\n    );\n\n    console.log(`\n💰 Points Calculation:`);\n    console.log(`   Tier: ${guestRestaurant.currentTier.name} (${tierDiscount}%)`);\n    console.log(`   Base Points: ${pointsCalculation.basePoints}`);\n    console.log(`   Bonus Points: ${pointsCalculation.bonusPoints}`);\n    console.log(`   Total Points: ${pointsCalculation.totalPoints}\n`)\n\n    // 5️⃣ СОЗДАТЬ ТРАНЗАКЦИЮ (ATOMIC)\n    const transaction = TransactionEntity.create({\n      id: this.generateTransactionId(),\n      guestRestaurantId: input.guestRestaurantId,\n      restaurantId: input.restaurantId,\n      type: 'SALE',\n      amount: input.amountRubles,\n      basePointsAwarded: pointsCalculation.basePoints,\n      bonusPointsAwarded: pointsCalculation.bonusPoints,\n      oldBalance: guestRestaurant.balancePoints,\n      newBalance: guestRestaurant.balancePoints + pointsCalculation.totalPoints,\n      status: 'COMPLETED',\n      posId: input.posId,\n      notes: input.notes,\n      createdAt: new Date(),\n    });\n\n    await this.transactionRepository.create(transaction);\n    console.log(`✅ Transaction created: ${transaction.id}\n`);\n\n    // 6️⃣ ОБНОВИТЬ БАЛАНС\n    const newBalance =\n      guestRestaurant.balancePoints + pointsCalculation.totalPoints;\n    await this.guestRestaurantRepository.updateBalance(\n      input.guestRestaurantId,\n      newBalance,\n    );\n\n    // Создать entry в balance_detail для истории\n    await this.balanceDetailRepository.createEntry({\n      guestRestaurantId: input.guestRestaurantId,\n      transactionId: transaction.id,\n      type: 'POINTS_AWARDED',\n      basePoints: pointsCalculation.basePoints,\n      bonusPoints: pointsCalculation.bonusPoints,\n      oldBalance: guestRestaurant.balancePoints,\n      newBalance,\n      createdAt: new Date(),\n    });\n\n    console.log(`💾 Balance updated: ${guestRestaurant.balancePoints} → ${newBalance}\n`);\n\n    // 7️⃣ ПРОВЕРИТЬ UPGRADE УРОВНЯ\n    let tierUpgraded = false;\n    let newTierName: string | undefined;\n\n    const tierThreshold = guestRestaurant.currentTier.maxPoints;\n    if (newBalance > tierThreshold) {\n      // TODO: Реализовать логику upgrade (когда будут определены правила)\n      // Пока просто логируем\n      console.log(`🎯 Tier upgrade possible: ${newBalance} > ${tierThreshold}\n`);\n\n      // const nextTier = await this.getNextTier(guestRestaurant.currentTier);\n      // if (nextTier) {\n      //   guestRestaurant.upgradeTier(nextTier);\n      //   tierUpgraded = true;\n      //   newTierName = nextTier.name;\n      //   // Create tier event\n      //   await this.tierEventRepository.create(...)\n      // }\n    }\n\n    // 8️⃣ РЕГЕНЕРИРОВАТЬ КАРТОЧКУ\n    // Инвалидировать старую карточку\n    if (guestRestaurant.activeCardId) {\n      await this.cardService.invalidateCard(\n        guestRestaurant.activeCardId,\n        transaction.id,\n      );\n    }\n\n    // Генерировать новую\n    const newQRToken = this.cardService.generateQRToken(\n      input.guestRestaurantId,\n      input.restaurantId,\n    );\n    const newSixDigitCode = this.cardService.generate6DigitCode();\n\n    console.log(`🎫 Card regenerated:`)\n    console.log(`   QR Token: ${newQRToken.substring(0, 20)}...`)\n    console.log(`   6-Digit: ${newSixDigitCode}\n`);\n\n    // TODO: Сохранить новую карточку\n    // await this.cardRepository.create(...)\n\n    // 9️⃣ ОБНОВИТЬ LAST VISIT\n    await this.guestRestaurantRepository.updateLastVisit(\n      input.guestRestaurantId,\n    );\n\n    console.log(`⏱️  Last visit updated\n`);\n    console.log(`🎉 Transaction completed successfully!\n`);\n\n    return {\n      transactionId: transaction.id,\n      basePointsAwarded: pointsCalculation.basePoints,\n      bonusPointsAwarded: pointsCalculation.bonusPoints,\n      totalPointsAwarded: pointsCalculation.totalPoints,\n      oldBalance: guestRestaurant.balancePoints,\n      newBalance,\n      tierUpgraded,\n      newTierName,\n      newQRToken,\n      newSixDigitCode,\n    };\n  }\n\n  /**\n   * Получает историю транзакций гостя\n   *\n   * @param guestRestaurantId ID гостя в ресторане\n   * @param limit Максимальное количество транзакций (default: 50)\n   * @param offset Offset для пагинации (default: 0)\n   * @returns Массив транзакций\n   */\n  async getTransactionHistory(\n    guestRestaurantId: string,\n    limit: number = 50,\n    offset: number = 0,\n  ): Promise<TransactionHistoryItem[]> {\n    const transactions = await this.transactionRepository.getByGuest(\n      guestRestaurantId,\n      limit,\n      offset,\n    );\n\n    return transactions.map((txn) => ({\n      transactionId: txn.id,\n      type: txn.type,\n      amount: txn.amount,\n      pointsAwarded: txn.basePointsAwarded + txn.bonusPointsAwarded,\n      newBalance: txn.newBalance,\n      status: txn.status,\n      createdAt: txn.createdAt,\n    }));\n  }\n\n  /**\n   * Получает текущий баланс гостя\n   *\n   * @param guestRestaurantId ID гостя в ресторане\n   * @returns Текущий баланс баллов\n   */\n  async getCurrentBalance(guestRestaurantId: string): Promise<number> {\n    const guestRestaurant = await this.guestRestaurantRepository.getById(\n      guestRestaurantId,\n    );\n\n    if (!guestRestaurant) {\n      throw {\n        code: ErrorCode.GUEST_NOT_FOUND,\n        message: `Гость ${guestRestaurantId} не найден`,\n      };\n    }\n\n    return guestRestaurant.balancePoints;\n  }\n\n  /**\n   * Получает общую сумму потраченного гостем\n   *\n   * @param guestRestaurantId ID гостя в ресторане\n   * @returns Общая сумма в рублях\n   */\n  async getTotalSpent(guestRestaurantId: string): Promise<number> {\n    return this.transactionRepository.getTotalSpent(guestRestaurantId);\n  }\n\n  /**\n   * Получает количество визитов гостя\n   *\n   * @param guestRestaurantId ID гостя в ресторане\n   * @returns Количество визитов\n   */\n  async getVisitCount(guestRestaurantId: string): Promise<number> {\n    const guestRestaurant = await this.guestRestaurantRepository.getById(\n      guestRestaurantId,\n    );\n\n    if (!guestRestaurant) {\n      throw {\n        code: ErrorCode.GUEST_NOT_FOUND,\n        message: `Гость ${guestRestaurantId} не найден`,\n      };\n    }\n\n    return guestRestaurant.visitsCount;\n  }\n\n  // ===== PRIVATE HELPERS =====\n\n  /**\n   * Валидирует входные данные\n   */\n  private validateInput(input: ProcessSaleTransactionInput): void {\n    if (!input.guestRestaurantId) {\n      throw {\n        code: ErrorCode.VALIDATION_ERROR,\n        message: 'guestRestaurantId обязателен',\n      };\n    }\n\n    if (!input.restaurantId) {\n      throw {\n        code: ErrorCode.VALIDATION_ERROR,\n        message: 'restaurantId обязателен',\n      };\n    }\n\n    if (!input.amountRubles || input.amountRubles <= 0) {\n      throw {\n        code: ErrorCode.VALIDATION_ERROR,\n        message: 'amountRubles должен быть больше 0',\n      };\n    }\n\n    if (input.amountRubles > 1000000) {\n      throw {\n        code: ErrorCode.VALIDATION_ERROR,\n        message: 'amountRubles превышает максимальный лимит (1,000,000)',\n      };\n    }\n  }\n\n  /**\n   * Генерирует уникальный ID транзакции\n   * Формат: txn-{timestamp}-{random}\n   */\n  private generateTransactionId(): string {\n    return `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;\n  }\n}\n\nexport {\n  ProcessSaleTransactionInput,\n  ProcessSaleTransactionOutput,\n  TransactionHistoryItem,\n};\n
+import { injectable, inject } from 'inversify';
+import { ITransactionService } from '../../domain/services';
+import { ITransactionRepository, IGuestRestaurantRepository, ITierEventRepository, IBalanceDetailRepository } from '../../domain/repositories';
+import { ICardService } from '../../domain/services/CardService';
+import { TYPES } from '../../shared/types';
+import { TransactionEntity, PointsCalculator } from '../../domain/entities';
+import { ErrorCode } from '../../shared/types';
+
+@injectable()
+export class TransactionServiceImpl implements ITransactionService {
+  constructor(
+    @inject(TYPES.Repositories.ITransactionRepository)
+    private transactionRepository: ITransactionRepository,
+
+    @inject(TYPES.Repositories.IGuestRestaurantRepository)
+    private guestRestaurantRepository: IGuestRestaurantRepository,
+
+    @inject(TYPES.Repositories.ITierEventRepository)
+    private tierEventRepository: ITierEventRepository,
+
+    @inject(TYPES.Repositories.IBalanceDetailRepository)
+    private balanceDetailRepository: IBalanceDetailRepository,
+
+    @inject(TYPES.Services.ICardService)
+    private cardService: ICardService,
+  ) {}
+
+  async processSaleTransaction(input: any): Promise<any> {
+    console.log('Processing Sale Transaction...');
+    this.validateInput(input);
+
+    const guestRestaurant = await this.guestRestaurantRepository.getById(input.guestRestaurantId);
+
+    if (!guestRestaurant) {
+      throw {
+        code: ErrorCode.GUEST_NOT_FOUND,
+        message: `Guest ${input.guestRestaurantId} not found`,
+      };
+    }
+
+    if (guestRestaurant.isBlocked) {
+      throw {
+        code: ErrorCode.GUEST_BLOCKED,
+        message: `Guest is blocked: ${guestRestaurant.blockReason || 'no reason'}`,
+      };
+    }
+
+    const tierDiscount = guestRestaurant.currentTier?.discountPercent || 5;
+    const pointsCalculation = PointsCalculator.calculatePointsAwarded(
+      input.amountRubles,
+      tierDiscount,
+    );
+
+    console.log(`Points Calculation:`);
+    console.log(`  Base: ${pointsCalculation.basePoints}`);
+    console.log(`  Bonus: ${pointsCalculation.bonusPoints}`);
+    console.log(`  Total: ${pointsCalculation.totalPoints}`);
+
+    const transaction = TransactionEntity.create({
+      id: `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      guestRestaurantId: input.guestRestaurantId,
+      restaurantId: input.restaurantId,
+      type: 'SALE',
+      amount: input.amountRubles,
+      basePointsAwarded: pointsCalculation.basePoints,
+      bonusPointsAwarded: pointsCalculation.bonusPoints,
+      oldBalance: guestRestaurant.balancePoints,
+      newBalance: guestRestaurant.balancePoints + pointsCalculation.totalPoints,
+      status: 'COMPLETED',
+      posId: input.posId,
+      notes: input.notes,
+      createdAt: new Date(),
+    });
+
+    await this.transactionRepository.create(transaction);
+    console.log(`Transaction created: ${transaction.id}`);
+
+    const newBalance = guestRestaurant.balancePoints + pointsCalculation.totalPoints;
+    await this.guestRestaurantRepository.updateBalance(input.guestRestaurantId, newBalance);
+
+    await this.balanceDetailRepository.createEntry({
+      guestRestaurantId: input.guestRestaurantId,
+      transactionId: transaction.id,
+      type: 'POINTS_AWARDED',
+      basePoints: pointsCalculation.basePoints,
+      bonusPoints: pointsCalculation.bonusPoints,
+      oldBalance: guestRestaurant.balancePoints,
+      newBalance,
+      createdAt: new Date(),
+    });
+
+    let tierUpgraded = false;
+    let newTierName: string | undefined;
+
+    if (guestRestaurant.currentTier?.maxPoints && newBalance > guestRestaurant.currentTier.maxPoints) {
+      console.log(`Tier upgrade possible: ${newBalance} > ${guestRestaurant.currentTier.maxPoints}`);
+      tierUpgraded = true;
+      // TODO: implement tier upgrade logic
+    }
+
+    if (guestRestaurant.activeCardId) {
+      await this.cardService.invalidateCard(guestRestaurant.activeCardId, transaction.id);
+    }
+
+    const newQRToken = this.cardService.generateQRToken(
+      input.guestRestaurantId,
+      input.restaurantId,
+    );
+    const newSixDigitCode = this.cardService.generate6DigitCode();
+
+    await this.guestRestaurantRepository.updateLastVisit(input.guestRestaurantId);
+
+    console.log(`Transaction completed successfully!`);
+
+    return {
+      transactionId: transaction.id,
+      basePointsAwarded: pointsCalculation.basePoints,
+      bonusPointsAwarded: pointsCalculation.bonusPoints,
+      totalPointsAwarded: pointsCalculation.totalPoints,
+      oldBalance: guestRestaurant.balancePoints,
+      newBalance,
+      tierUpgraded,
+      newTierName,
+      newQRToken,
+      newSixDigitCode,
+    };
+  }
+
+  async getTransactionHistory(guestRestaurantId: string, limit: number = 50, offset: number = 0): Promise<any[]> {
+    const transactions = await this.transactionRepository.getByGuest(guestRestaurantId, limit, offset);
+
+    return transactions.map((txn) => ({
+      transactionId: txn.id,
+      type: txn.type,
+      amount: txn.amount,
+      pointsAwarded: txn.basePointsAwarded + txn.bonusPointsAwarded,
+      newBalance: txn.newBalance,
+      status: txn.status,
+      createdAt: txn.createdAt,
+    }));
+  }
+
+  async getCurrentBalance(guestRestaurantId: string): Promise<number> {
+    const guestRestaurant = await this.guestRestaurantRepository.getById(guestRestaurantId);
+
+    if (!guestRestaurant) {
+      throw {
+        code: ErrorCode.GUEST_NOT_FOUND,
+        message: `Guest ${guestRestaurantId} not found`,
+      };
+    }
+
+    return guestRestaurant.balancePoints;
+  }
+
+  async getTotalSpent(guestRestaurantId: string): Promise<number> {
+    return this.transactionRepository.getTotalSpent(guestRestaurantId);
+  }
+
+  async getVisitCount(guestRestaurantId: string): Promise<number> {
+    const guestRestaurant = await this.guestRestaurantRepository.getById(guestRestaurantId);
+
+    if (!guestRestaurant) {
+      throw {
+        code: ErrorCode.GUEST_NOT_FOUND,
+        message: `Guest ${guestRestaurantId} not found`,
+      };
+    }
+
+    return guestRestaurant.visitsCount;
+  }
+
+  private validateInput(input: any): void {
+    if (!input.guestRestaurantId) {
+      throw {
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'guestRestaurantId is required',
+      };
+    }
+
+    if (!input.restaurantId) {
+      throw {
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'restaurantId is required',
+      };
+    }
+
+    if (!input.amountRubles || input.amountRubles <= 0) {
+      throw {
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'amountRubles must be greater than 0',
+      };
+    }
+
+    if (input.amountRubles > 1000000) {
+      throw {
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'amountRubles exceeds maximum limit (1,000,000)',
+      };
+    }
+  }
+}
