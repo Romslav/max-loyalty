@@ -1,36 +1,9 @@
 import { injectable, inject } from 'inversify';
-import { IRestaurantService } from '../../domain/services/RestaurantService';
+import { IRestaurantService } from '../../domain/services';
 import { IRestaurantRepository, ITierDefinitionRepository } from '../../domain/repositories';
 import { TYPES } from '../../shared/types';
 import { RestaurantEntity, TierEntity } from '../../domain/entities';
 import { ErrorCode } from '../../shared/types';
-
-interface RegisterRestaurantInput {
-  name: string;
-  inn: string;
-  address: string;
-  city: string;
-  phone?: string;
-  email?: string;
-}
-
-interface UpdateCustomizationInput {
-  restaurantId: string;
-  programName?: string;
-  description?: string;
-  pointsPerRuble?: number;
-  pointsExpireDays?: number;
-}
-
-interface DefineTierInput {
-  restaurantId: string;
-  tiersConfig: Array<{
-    name: string;
-    discountPercent: number;
-    minPoints: number;
-    maxPoints: number;
-  }>;
-}
 
 @injectable()
 export class RestaurantServiceImpl implements IRestaurantService {
@@ -42,13 +15,11 @@ export class RestaurantServiceImpl implements IRestaurantService {
     private tierDefinitionRepository: ITierDefinitionRepository,
   ) {}
 
-  async registerRestaurant(
-    input: RegisterRestaurantInput,
-  ): Promise<RestaurantEntity> {
+  async registerRestaurant(input: any): Promise<any> {
     if (!input.name || !input.inn || !input.address) {
       throw {
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'name, inn, address обязательны',
+        message: 'name, inn, address are required',
       };
     }
 
@@ -56,16 +27,16 @@ export class RestaurantServiceImpl implements IRestaurantService {
     if (existing) {
       throw {
         code: ErrorCode.RESTAURANT_ALREADY_EXISTS,
-        message: `Ресторан с ИНН ${input.inn} уже зарегистрирован`,
+        message: `Restaurant with INN ${input.inn} already exists`,
       };
     }
 
     const restaurant = RestaurantEntity.create({
-      id: this.generateRestaurantId(),
+      id: `rest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: input.name.trim(),
       inn: input.inn.trim(),
       address: input.address.trim(),
-      city: input.city.trim(),
+      city: input.city?.trim() || '',
       phone: input.phone?.trim(),
       email: input.email?.trim(),
       isActive: true,
@@ -74,16 +45,16 @@ export class RestaurantServiceImpl implements IRestaurantService {
     });
 
     await this.restaurantRepository.create(restaurant);
-    console.log(`✅ Restaurant registered: ${restaurant.id} (${input.inn})`);
+    console.log(`Restaurant registered: ${restaurant.id} (${input.inn})`);
 
     return restaurant;
   }
 
-  async getRestaurant(restaurantId: string): Promise<RestaurantEntity> {
+  async getRestaurant(restaurantId: string): Promise<any> {
     if (!restaurantId) {
       throw {
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'restaurantId обязателен',
+        message: 'restaurantId is required',
       };
     }
 
@@ -91,16 +62,14 @@ export class RestaurantServiceImpl implements IRestaurantService {
     if (!restaurant) {
       throw {
         code: ErrorCode.RESTAURANT_NOT_FOUND,
-        message: `Ресторан ${restaurantId} не найден`,
+        message: `Restaurant ${restaurantId} not found`,
       };
     }
 
     return restaurant;
   }
 
-  async updateCustomization(
-    input: UpdateCustomizationInput,
-  ): Promise<void> {
+  async updateCustomization(input: any): Promise<void> {
     const restaurant = await this.getRestaurant(input.restaurantId);
 
     if (input.programName) {
@@ -122,22 +91,22 @@ export class RestaurantServiceImpl implements IRestaurantService {
     restaurant.updatedAt = new Date();
     await this.restaurantRepository.update(input.restaurantId, restaurant);
 
-    console.log(`✏️  Restaurant customization updated: ${input.restaurantId}`);
+    console.log(`Restaurant customization updated: ${input.restaurantId}`);
   }
 
-  async defineTiers(input: DefineTierInput): Promise<void> {
+  async defineTiers(input: any): Promise<void> {
     await this.getRestaurant(input.restaurantId);
 
     if (!input.tiersConfig || input.tiersConfig.length === 0) {
       throw {
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'tiersConfig должен содержать хотя бы один уровень',
+        message: 'tiersConfig must contain at least one tier',
       };
     }
 
     for (const tierConfig of input.tiersConfig) {
       const tier = TierEntity.create({
-        id: this.generateTierId(),
+        id: `tier-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         restaurantId: input.restaurantId,
         name: tierConfig.name,
         discountPercent: tierConfig.discountPercent,
@@ -149,32 +118,16 @@ export class RestaurantServiceImpl implements IRestaurantService {
       await this.tierDefinitionRepository.create(tier);
     }
 
-    console.log(
-      `🏆 Tiers defined: ${input.restaurantId} (${input.tiersConfig.length} tiers)`,
-    );
+    console.log(`Tiers defined: ${input.restaurantId} (${input.tiersConfig.length} tiers)`);
   }
 
   async getStaffList(restaurantId: string): Promise<any[]> {
-    // TODO: Получить из staff_restaurants
+    // TODO: Get staff from database
     return [];
   }
 
   async assignStaff(restaurantId: string, userId: string): Promise<void> {
-    // TODO: Создать запись в staff_restaurants
-    console.log(`👤 Staff assigned: ${userId} to ${restaurantId}`);
-  }
-
-  private generateRestaurantId(): string {
-    return `rest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private generateTierId(): string {
-    return `tier-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // TODO: Create staff assignment in database
+    console.log(`Staff assigned: ${userId} to ${restaurantId}`);
   }
 }
-
-export {
-  RegisterRestaurantInput,
-  UpdateCustomizationInput,
-  DefineTierInput,
-};

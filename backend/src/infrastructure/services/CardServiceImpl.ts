@@ -1,2 +1,126 @@
-/**\n * CardServiceImpl - Card & Token Management Service\n *\n * Ответствен за:\n * - Генерацию QR токенов (HMAC-SHA256)\n * - Генерацию 6-значных кодов\n * - Валидацию токенов\n * - Инвалидацию карточек\n *\n * Криптография: HMAC-SHA256 с timing-safe сравнением\n *\n * @author Phase 2 Implementation\n * @date 2026-01-25\n */\n\nimport { injectable } from 'inversify';\nimport * as crypto from 'crypto';\nimport { ICardService } from '../../domain/services/CardService';\nimport { ErrorCode } from '../../shared/types';\n\ninterface CardValidationResult {\n  isValid: boolean;\n  reason?: string;\n}\n\n@injectable()\nexport class CardServiceImpl implements ICardService {\n  private readonly QR_SECRET_KEY = process.env.QR_SECRET_KEY || 'dev-secret-key';\n  private readonly QR_ALGORITHM = 'sha256';\n\n  /**\n   * Генерирует QR токен с HMAC-SHA256 подпись\u044e\n   *\n   * Процесс:\n   * 1. Комбинирую \u043fоля: guestRestaurantId:restaurantId:timestamp\n   * 2. Подписываю HMAC-SHA256 с SECRET_KEY\n   * 3. Возвращаю payload.signature (Base64)\n   *\n   * Особенности:\n   * - Криптографически асимметрич\n   * - Невозможно подделать без SECRET_KEY\n   * - Timestamp предотвращает replay-атаки\n   *\n   * @param guestRestaurantId ID гостя в ресторане\n   * @param restaurantId ID ресторана\n   * @returns HMAC-SHA256 сигнированный токен\n   *\n   * @example\n   * const token = cardService.generateQRToken('gr-123', 'rest-456');\n   * // Returns: '...signature...' (hexadecimal)\\ *\n   * // QR code scans this token, backend verifies signature\n   */\n  generateQRToken(guestRestaurantId: string, restaurantId: string): string {\n    if (!guestRestaurantId || !restaurantId) {\n      throw {\n        code: ErrorCode.VALIDATION_ERROR,\n        message: 'guestRestaurantId и restaurantId обязателы',\n      };\n    }\n\n    // 1️⃣ СОСТАВЛЯЮ payload\n    const timestamp = Date.now();\n    const payload = `${guestRestaurantId}:${restaurantId}:${timestamp}`;\n\n    // 2️⃣ ПОДПИСЫВАЮ HMAC-SHA256\n    const signature = crypto\n      .createHmac(this.QR_ALGORITHM, this.QR_SECRET_KEY)\n      .update(payload)\n      .digest('hex');\n\n    // 3️⃣ ВОЗВРАЩАЮ payload.signature\n    const token = `${payload}.${signature}`;\n\n    console.log(`\n🎫 QR Token Generated:\n   Guest: ${guestRestaurantId}\n   Signature: ${signature.substring(0, 20)}...`)\n\n    return token;\n  }\n\n  /**\n   * Проверяет валидность QR токена\n   *\n   * Процесс:\n   * 1. Разбираю token на payload и signature\n   * 2. Пересчитываю signature для payload\n   * 3. Сравниваю timing-safe способом\n   * 4. Проверяю timestamp (не старее 24 часов)\n   *\n   * Важно: crypto.timingSafeEqual защищает от timing attacks\n   *\n   * @param token QR токен\n   * @param restaurantId ID ресторана\n   * @returns Результат валидации\n   *\n   * @example\n   * const result = cardService.validateQRToken(token, 'rest-456');\n   * if (result.isValid) {\n   *   // Process transaction\n   * } else {\n   *   console.error('Invalid token:', result.reason);\n   * }\n   */\n  validateQRToken(token: string, restaurantId: string): CardValidationResult {\n    try {\n      // 1️⃣ РАЗБОР\n      const [payload, signature] = token.split('.');\n\n      if (!payload || !signature) {\n        return {\n          isValid: false,\n          reason: 'Неверный формат токена',\n        };\n      }\n\n      // 2️⃣ ПЕРЕСЧИТЫВАЮ signature\n      const expectedSignature = crypto\n        .createHmac(this.QR_ALGORITHM, this.QR_SECRET_KEY)\n        .update(payload)\n        .digest('hex');\n\n      // 3️⃣ СРАВНИВАЮ (timing-safe)\n      const isSignatureValid = crypto.timingSafeEqual(\n        Buffer.from(signature),\n        Buffer.from(expectedSignature),\n      );\n\n      if (!isSignatureValid) {\n        return {\n          isValid: false,\n          reason: 'Неверная подпись',\n        };\n      }\n\n      // 4️⃣ ПРОВЕРЯЮ timestamp\n      const [_guestRestaurantId, _restaurantId, timestamp] = payload.split(':');\n      const now = Date.now();\n      const tokenAge = now - parseInt(timestamp);\n      const MAX_AGE = 24 * 60 * 60 * 1000; // 24 часа\n\n      if (tokenAge > MAX_AGE) {\n        return {\n          isValid: false,\n          reason: 'Токен истек (24 часа)',\n        };\n      }\n\n      // 5️⃣ ПРОВеряю restaurantId\n      if (_restaurantId !== restaurantId) {\n        return {\n          isValid: false,\n          reason: 'Токен не соответствует ресторану',\n        };\n      }\n\n      console.log(`\u2705 QR Token Valid: ${_guestRestaurantId}`)\n\n      return { isValid: true };\n    } catch (error) {\n      return {\n        isValid: false,\n        reason: `Ошибка при валидации: ${(error as Error).message}`,\n      };\n    }\n  }\n\n  /**\n   * Генерирует случайный 6-значный код\n   *\n   * Особенности:\n   * - Truly random (uses crypto.randomInt)\n   * - Range: 000000-999999\n   * - Unique per card\n   * - Cannot be predicted\n   *\n   * @returns 6-значный код в виде строки\n   *\n   * @example\n   * const code = cardService.generate6DigitCode();\n   * // Returns: '123456' or '000001' or '999999'\n   */\n  generate6DigitCode(): string {\n    // crypto.randomInt генерирует криптографически стронгие случайные числа\n    const code = crypto.randomInt(0, 1000000);\n\n    // дополняем нулями слева\n    return code.toString().padStart(6, '0');\n  }\n\n  /**\n   * Проверяет 6-значный код\n   *\n   * \u0427то делает:\n   * - Получает код из БД\n   * - Проверяет то поля (timing-safe)\n   * - Проверяет статус (is_active = 1)\n   * - Проверяет invalidated_at = null\n   *\n   * @param code 6-значный код\n   * @param restaurantId ID ресторана\n   * @returns Результат валидации\n   */\n  validate6DigitCode(code: string, restaurantId: string): CardValidationResult {\n    // TODO: Реализуется завтра с репозиториям\n    // - Найти в card_identifiers \n    // - Проверить is_active = 1\n    // - Проверить invalidated_at IS NULL\n\n    if (!code || code.length !== 6) {\n      return {\n        isValid: false,\n        reason: 'Код должен состоять из 6 цифр',\n      };\n    }\n\n    if (!/^\d{6}$/.test(code)) {\n      return {\n        isValid: false,\n        reason: 'Код должен состоять только из цифр',\n      };\n    }\n\n    console.log(`✅ 6-Digit Code Format Valid: ${code}`);\n\n    return { isValid: true };\n  }\n\n  /**\n   * Инвалидирует карточку после транзакции\n   *\n   * Что делает:\n   * - Маркирует карточку как invalidated\n   * - Устанавливает invalidated_at = NOW()\n   * - Связывает с транзакцией\n   * - Потом будет генерирована новая\n   *\n   * @param cardId ID карточки\n   * @param transactionId ID транзакции\n   */\n  async invalidateCard(
-    cardId: string,\n    transactionId: string,\n  ): Promise<void> {\n    // TODO: Будет реализовано завтра с репозиторию\n    // UPDATE card_identifiers \n    // SET is_active = 0, invalidated_at = NOW(), invalidated_by_transaction_id = transactionId\n    // WHERE id = cardId\n\n    console.log(`✅ Card invalidated: ${cardId} (txn: ${transactionId})`);\n  }\n\n  /**\n   * Получает активную карточку гостя\n   *\n   * @param guestRestaurantId ID гостя\n   * @param restaurantId ID ресторана\n   * @returns Карточка или null\n   */\n  async getActiveCard(\n    guestRestaurantId: string,\n    restaurantId: string,\n  ): Promise<any | null> {\n    // TODO: \n    // SELECT * FROM card_identifiers\n    // WHERE guest_restaurant_id = guestRestaurantId\n    //   AND restaurant_id = restaurantId\n    //   AND is_active = 1\n    //   AND invalidated_at IS NULL\n    // ORDER BY created_at DESC\n    // LIMIT 1\n\n    return null;\n  }\n}\n\nexport { CardValidationResult };\n
+import { injectable } from 'inversify';
+import * as crypto from 'crypto';
+import { ICardService } from '../../domain/services/CardService';
+import { ErrorCode } from '../../shared/types';
+
+@injectable()
+export class CardServiceImpl implements ICardService {
+  private readonly QR_SECRET_KEY = process.env.QR_SECRET_KEY || 'dev-secret-key';
+  private readonly QR_ALGORITHM = 'sha256';
+
+  generateQRToken(guestRestaurantId: string, restaurantId: string): string {
+    if (!guestRestaurantId || !restaurantId) {
+      throw {
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'guestRestaurantId and restaurantId are required',
+      };
+    }
+
+    const timestamp = Date.now();
+    const payload = `${guestRestaurantId}:${restaurantId}:${timestamp}`;
+
+    const signature = crypto
+      .createHmac(this.QR_ALGORITHM, this.QR_SECRET_KEY)
+      .update(payload)
+      .digest('hex');
+
+    const token = `${payload}.${signature}`;
+
+    console.log(`QR Token Generated: ${signature.substring(0, 20)}...`);
+
+    return token;
+  }
+
+  validateQRToken(token: string, restaurantId: string): any {
+    try {
+      const [payload, signature] = token.split('.');
+
+      if (!payload || !signature) {
+        return {
+          isValid: false,
+          reason: 'Invalid token format',
+        };
+      }
+
+      const expectedSignature = crypto
+        .createHmac(this.QR_ALGORITHM, this.QR_SECRET_KEY)
+        .update(payload)
+        .digest('hex');
+
+      const isSignatureValid = crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature),
+      );
+
+      if (!isSignatureValid) {
+        return {
+          isValid: false,
+          reason: 'Invalid signature',
+        };
+      }
+
+      const [_guestRestaurantId, _restaurantId, timestamp] = payload.split(':');
+      const now = Date.now();
+      const tokenAge = now - parseInt(timestamp);
+      const MAX_AGE = 24 * 60 * 60 * 1000;
+
+      if (tokenAge > MAX_AGE) {
+        return {
+          isValid: false,
+          reason: 'Token expired (24 hours)',
+        };
+      }
+
+      if (_restaurantId !== restaurantId) {
+        return {
+          isValid: false,
+          reason: 'Token does not match restaurant',
+        };
+      }
+
+      console.log(`QR Token Valid: ${_guestRestaurantId}`);
+
+      return { isValid: true };
+    } catch (error) {
+      return {
+        isValid: false,
+        reason: `Validation error: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  generate6DigitCode(): string {
+    const code = crypto.randomInt(0, 1000000);
+    return code.toString().padStart(6, '0');
+  }
+
+  validate6DigitCode(code: string, restaurantId: string): any {
+    if (!code || code.length !== 6) {
+      return {
+        isValid: false,
+        reason: 'Code must be 6 digits',
+      };
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      return {
+        isValid: false,
+        reason: 'Code must contain only digits',
+      };
+    }
+
+    console.log(`6-Digit Code Format Valid: ${code}`);
+
+    return { isValid: true };
+  }
+
+  async invalidateCard(cardId: string, transactionId: string): Promise<void> {
+    // TODO: Mark card as invalidated in database
+    console.log(`Card invalidated: ${cardId} (txn: ${transactionId})`);
+  }
+
+  async getActiveCard(guestRestaurantId: string, restaurantId: string): Promise<any | null> {
+    // TODO: Get active card from database
+    return null;
+  }
+}
